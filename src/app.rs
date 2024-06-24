@@ -2,14 +2,24 @@ use leptos::*;
 use serde_json::Value;
 use wasm_bindgen::prelude::*;
 
+#[component]
 pub fn App() -> impl IntoView {
-    // References to the file input elements
-    let file1_ref = create_node_ref::<html::Input>();
-    let file2_ref = create_node_ref::<html::Input>();
-    
     // Signal to track if both files are provided
     let (missing_files, set_missing_files) = create_signal(false);
 
+    view! {
+        <Home files_missing=set_missing_files/>
+        <Show when=move || { missing_files.get() }>
+            <MissingFilesAlert />
+        </Show>
+    }
+}
+
+#[component]
+fn Home(files_missing: WriteSignal<bool>) -> impl IntoView {
+    // References to the file input elements
+    let file1_ref = create_node_ref::<html::Input>();
+    let file2_ref = create_node_ref::<html::Input>();
     // Function to handle the Analyze button click
     let analyze = move |_| {
         let file1_input = file1_ref.get().unwrap();
@@ -22,14 +32,13 @@ pub fn App() -> impl IntoView {
             // Read and parse the files
             read_and_parse_file(file1);
             read_and_parse_file(file2);
-            set_missing_files.set(false)
+            files_missing.set(false)
         } else {
-            set_missing_files.set(true);
+            files_missing.set(true);
         }
     };
-
     view! {
-        <div class="container mx-auto p-4 flex flex-col items-center justify-center min-h-screen bg-yellow-50">
+        <div class="container mx-auto p-4 flex flex-col items-center justify-center min-h-screen">
             <h1 class="text-2xl font-bold mb-4">
                 "Location History Analyzer"
             </h1>
@@ -52,12 +61,10 @@ pub fn App() -> impl IntoView {
             </div>
             <button class="btn btn-primary" on:click={analyze}> "Analyze" </button>
         </div>
-        <Show when=move || { missing_files.get() }>
-            <MissingFilesAlert />
-        </Show>
     }
 }
 
+#[component]
 fn MissingFilesAlert() -> impl IntoView {
     view! {
         <div class="toast toast-top toast-end">
