@@ -5,18 +5,18 @@ use wasm_bindgen::prelude::*;
 #[component]
 pub fn App() -> impl IntoView {
     // Signal to track if both files are provided
-    let (missing_files, set_missing_files) = create_signal(false);
+    let (error_message, set_error_message) = create_signal("".to_string());
 
     view! {
-        <Home files_missing=set_missing_files/>
-        <Show when=move || { missing_files.get() }>
-            <MissingFilesAlert />
+        <Home files_missing=set_error_message/>
+        <Show when=move || { !error_message.get().is_empty() }>
+            <ErrorAlert error_message=error_message/>
         </Show>
     }
 }
 
 #[component]
-fn Home(files_missing: WriteSignal<bool>) -> impl IntoView {
+fn Home(files_missing: WriteSignal<String>) -> impl IntoView {
     // References to the file input elements
     let file1_ref = create_node_ref::<html::Input>();
     let file2_ref = create_node_ref::<html::Input>();
@@ -30,13 +30,14 @@ fn Home(files_missing: WriteSignal<bool>) -> impl IntoView {
             file2_input.files().and_then(|list| list.get(0)),
         ) {
             // Read and parse the files
-            read_and_parse_file(file1);
-            read_and_parse_file(file2);
-            files_missing.set(false)
+            read_and_parse_file(file1, files_missing);
+            read_and_parse_file(file2, files_missing);
+            files_missing.set("".to_string());
         } else {
-            files_missing.set(true);
+            files_missing.set("Please provide both files.".to_string());
         }
     };
+
     view! {
         <div class="container mx-auto p-4 flex flex-col items-center justify-center min-h-screen">
             <h1 class="text-2xl font-bold mb-4">
@@ -65,7 +66,7 @@ fn Home(files_missing: WriteSignal<bool>) -> impl IntoView {
 }
 
 #[component]
-fn MissingFilesAlert() -> impl IntoView {
+fn ErrorAlert(error_message: ReadSignal<String>) -> impl IntoView {
     view! {
         <div class="toast toast-top toast-end">
             <div class="alert alert-error alert-sm shadow-lg">
@@ -73,30 +74,33 @@ fn MissingFilesAlert() -> impl IntoView {
                     <svg xmlns="(link unavailable)" fill="none" viewBox="0 0 24 24" class="stroke-current inline-block w-6 h-6">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                     </svg>
-                    <span>"Please provide both files."</span>
+                    <span>{move || error_message.get()}</span>
                 </div>
             </div>
         </div>
     }
 }
 
-// Function to read and parse a file
-fn read_and_parse_file(file: web_sys::File) {
+// // Function to read and parse a file to json
+fn read_and_parse_file(file: web_sys::File, error_setter: WriteSignal<String>) {
     let file_reader = web_sys::FileReader::new().unwrap();
-    let fr_c = file_reader.clone();
-
-    let onloadend_cb = Closure::wrap(Box::new(move || {
-        if fr_c.ready_state() == web_sys::FileReader::DONE {
-            let result = fr_c.result().unwrap();
-            let json_str = result.as_string().unwrap();
-            let json_value: Value = serde_json::from_str(&json_str).unwrap();
-            console_log(&format!("{:?}", json_value));
+    let file_reader_clone = file_reader.clone();
+    let onloadend_callback = Closure::wrap(Box::new(move || {
+        if file_reader_clone.ready_state() == web_sys::FileReader::DONE {
+            match file_reader_clone.result().unwrap().as_string() {
+                Some(json_str) => {
+                    match serde_json::from_str::<Value>(&json_str) {
+                        Ok(json_value) => console_log(&format!("{:?}", json_value)),
+                        Err(_) => error_setter.set("Incorrect Formatting".to_string())
+                    }
+                }
+                None => error_setter.set("Unable to read file".to_string())
+            }  
         }
     }) as Box<dyn Fn()>);
-
-    file_reader.set_onloadend(Some(onloadend_cb.as_ref().unchecked_ref()));
-    file_reader.read_as_text(&file).unwrap();
-    onloadend_cb.forget();
+    file_reader.set_onloadend(Some(onloadend_callback.as_ref().unchecked_ref()));
+    let _ = file_reader.read_as_text(&file);
+    onloadend_callback.forget();
 }
 
 #[wasm_bindgen]
