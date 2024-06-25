@@ -1,6 +1,5 @@
 /target
 /dist
-/release
 
 package-lock.json
 node_modules

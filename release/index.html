@@ -1,0 +1,8 @@
+<!doctype html><html data-theme=dark lang=en><meta charset=utf-8><title>Location History App</title><link href=/chance-encounters/tailwind-181ee3752df72db2.css integrity=sha384-tpbGhpYfP8tO3pLKaf22NDcht+RxfEK3vtDE6sFDGQSNSXciViFxaI9UZ3aHXTaW rel=stylesheet><link crossorigin href=/chance-encounters/chance-encounters-1519a7492b746f49.js integrity=sha384-ulWXRJ5C6iSNZgRHfi6KviO/XNVngDoc3qm7GSHvpw19sYUwmBGbioi+4gQVpd62 rel=modulepreload><link as=fetch crossorigin href=/chance-encounters/chance-encounters-1519a7492b746f49_bg.wasm integrity=sha384-NWfNLl6qwzEk0eWcKfQyTxmzkH0vxDE4BX/QZs/MJdb6S76clUGEQEOz7J/63xSm rel=preload type=application/wasm></head><body><div id=app></div><script nonce="2jgPTD2Jo/oXOw/2sGI73g==" type=module>import init, * as bindings from '/chance-encounters/chance-encounters-1519a7492b746f49.js';
+const wasm = await init('/chance-encounters/chance-encounters-1519a7492b746f49_bg.wasm');
+
+
+window.wasmBindings = bindings;
+
+
+dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));</script></body></html>
