@@ -105,5 +105,5 @@ fn read_and_parse_file(file: web_sys::File, error_setter: WriteSignal<String>) {
 
 #[wasm_bindgen]
 pub fn console_log(s: &str) {
-    web_sys::console::log_1(&s.into());
+    logging::log!("{s}");
 }
