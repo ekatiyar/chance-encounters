@@ -1,4 +1,6 @@
 mod app;
+mod utils;
+mod decoders;
 
 use app::*;
 use leptos::*;
