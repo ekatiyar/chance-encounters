@@ -34,22 +34,30 @@ This guide will help you set up the project by installing necessary dependencies
     cargo install cargo-make
     ```
 
-4. **Download Rust dependencies**
-
-    Navigate to your project directory and run:
-    
-    ```sh
-    cargo build
-    ```
-
-    This will install the dependencies listed in the `Cargo.toml` file.
-
-5. **Download Node.js dependencies**
-
-    Navigate to your project directory and run:
+4. **Download Node.js dependencies**
     
     ```sh
     npm install
     ```
 
     This will install the dependencies listed in the `package.json` file.
+
+5. **Run locally**
+
+    Navigate to the project directory and run:
+    
+    ```sh
+    trunk serve --open
+    ```
+
+    This will install the dependencies listed in the `Cargo.toml` file and serve the application locally
+
+6. **More Options**
+
+    Take a look at Makefile.toml for cargo-make targets. Here is one example
+
+    ```sh
+    cargo make run-dev
+    ```
+
+    This runs the same command as Step 5.
