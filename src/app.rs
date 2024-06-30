@@ -1,6 +1,5 @@
 use leptos::*;
-use crate::utils::{fileutils::*, utils::*};
-use std::cmp::Ordering;
+use crate::{decoders::*, utils::{fileutils::*, *}};
 
 #[component]
 pub fn App() -> impl IntoView {
@@ -31,11 +30,8 @@ fn Home(button_clicked: ReadSignal<bool>) -> impl IntoView {
         set_file1_result.set_untracked(Err(String::new()));
         set_file2_result.set_untracked(Err(String::new()));
         use_context::<WriteSignal<Vec<String>>>().unwrap().update(|messages| messages.clear());
-        
-        let populated_files = extract_file_data(&file1_ref, &file2_ref, set_file1_result, set_file2_result);
-        if populated_files {
-            set_processing(true);
-        }
+        set_processing(true);
+        extract_file_data(&file1_ref, &file2_ref, set_file1_result, set_file2_result);
     };
     
     view! {
@@ -72,7 +68,7 @@ fn extract_file_data(
     file1_ref: &NodeRef<html::Input>,
     file2_ref: &NodeRef<html::Input>,
     file1_setter: WriteSignal<FileResult>,
-    file2_setter: WriteSignal<FileResult>) -> bool{
+    file2_setter: WriteSignal<FileResult>) {
     let file1_input = file1_ref.get().unwrap();
         let file2_input = file2_ref.get().unwrap();
 
@@ -86,11 +82,9 @@ fn extract_file_data(
 
             read_and_parse_file(FileDesc{filename: filename1, file: file1}, file1_setter);
             read_and_parse_file(FileDesc{filename: filename2, file: file2}, file2_setter);
-            return true
         } else {
-            log_error("Please provide both files.".to_string());
+            end_processing("Please provide both files.".to_string());
         }
-        false
 }
 
 #[component]
@@ -104,25 +98,18 @@ fn LoadingSpinner() -> impl IntoView {
 
 fn process_data(file1: String, file2: String) -> String
 {
-    let mut diff = String::new();
-    let lines1 = file1.lines().collect::<Vec<&str>>();
-    let lines2 = file2.lines().collect::<Vec<&str>>();
-    let min_len = lines1.len().min(lines2.len());
-    logging::log!("min_len: {}", min_len);
-    for i in 0..min_len {
-        if lines1[i] != lines2[i] {
-            diff.push_str(&format!("- {}\n+ {}\n", lines1[i], lines2[i]));
-        } else {
-            diff.push_str(&format!("  {}\n", lines1[i]));
-        }
+    let record1 = to_record(FileFormat::Json, &file1);
+    match record1 {
+        Ok(record) => logging::log!("Record: {:?}", record.get_points()),
+        Err(error) => end_processing(error.to_string()),
     }
-    match lines1.len().cmp(&lines2.len()) {
-        Ordering::Greater => diff.push_str(&format!("- {}\n", lines1[min_len..].join("\n"))),
-        Ordering::Less => diff.push_str(&format!("+ {}\n", lines2[min_len..].join("\n"))),
-        Ordering::Equal => (),
+    let record2 = to_record(FileFormat::Json, &file2);
+    match record2 {
+        Ok(record) => logging::log!("Record: {:?}", record),
+        Err(error) => end_processing(error.to_string()),
     }
-    
-    diff
+
+    String::new()
     // TODO: Implement actual analysis logic here
 }
 
@@ -136,8 +123,7 @@ fn ResultDisplay(file1_result: ReadSignal<FileResult>, file2_result: ReadSignal<
                 Ok(_) => (),
                 Err(error) => {
                     if !error.is_empty() {
-                        set_processing(false);
-                        log_error(error);
+                        end_processing(error);
                     }
                 }
             };
@@ -145,8 +131,7 @@ fn ResultDisplay(file1_result: ReadSignal<FileResult>, file2_result: ReadSignal<
                 Ok(_) => (),
                 Err(error) => {
                     if !error.is_empty() {
-                        set_processing(false);
-                        log_error(error);
+                        end_processing(error);
                     }
                 }
             };

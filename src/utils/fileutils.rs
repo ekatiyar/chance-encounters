@@ -3,6 +3,7 @@ use web_sys::{File, FileReader};
 use wasm_bindgen::prelude::*;
 use leptos::*;
 
+// Function to get filename from path
 pub fn get_filename(path: &str) -> Option<String> {
     if path.is_empty() || path.ends_with('/') || path.ends_with('\\') {
         None
@@ -16,14 +17,13 @@ pub fn get_filename(path: &str) -> Option<String> {
 }
 
 // Struct to hold filename and web_sys::File object
-// #[derive(PartialEq)]
-// #[derive(Clone)]
 pub struct FileDesc {
     pub filename: String,
     pub file: File
 }
 pub type FileResult = Result<String, String>;
-// // Function to read and parse a file to json
+
+// Function to read and parse a file to json
 pub fn read_and_parse_file(file_desc: FileDesc, set_file_out: WriteSignal<FileResult>) {
     let (filename, file) = (file_desc.filename, file_desc.file);
     let file_reader = FileReader::new().unwrap();
@@ -57,7 +57,6 @@ pub fn read_and_parse_file(file_desc: FileDesc, set_file_out: WriteSignal<FileRe
 #[cfg(test)]
 mod tests {
     use super::*;
-    // use wasm_bindgen_test::*;
 
     #[test]
     fn test_get_filename() {
@@ -67,13 +66,4 @@ mod tests {
         assert_eq!(get_filename("/fakepath/"), None);
         assert_eq!(get_filename(r"C:\fakepath\"), None);
     }
-
-    // #[wasm_bindgen_test]
-    // async fn test_read_and_parse_file_success() {
-    //     let filename = "test.txt".to_string();
-    //     let file_content = JsValue::from_str("test data");
-    //     let file = File::new_with_str_sequence(&file_content, &filename).expect("Failed to create file");
-    //     let result = read_and_parse_file(file, filename).await;
-    //     assert_eq!(result, Ok("test data".to_string()));
-    // }
 }
