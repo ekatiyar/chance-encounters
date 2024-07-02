@@ -1,48 +1,123 @@
-use std::str::FromStr;
-use crate::decoders::{LocationRecords, SpaceTimePoint};
+use super::*;
 use serde::Deserialize;
 use serde_json;
 
-#[derive(Debug)]
-pub struct JsonRecords {
-    points: Vec<SpaceTimePoint>,
+#[derive(Deserialize)]
+pub struct JsonRecord
+{
+    entries: Vec<JsonEntry>,
+}
+
+type GeoLocation = String;
+#[derive(Deserialize)]
+struct JsonEntry {
+    #[serde(rename = "startTime")]
+    start_time: String,
+    #[serde(rename = "endTime")]
+    end_time: String,
+    visit: Option<Visit>,
+    #[serde(rename = "timelinePath")]
+    timeline_path: Option<Vec<TimeLinePath>>,
+    start: Option<GeoLocation>,
+    end: Option<GeoLocation>,
 }
 
 #[derive(Deserialize)]
-struct JsonPoint {
-    start_time: String,
-    end_time: String,
-    longitude: f64,
-    latitude: f64,
+struct Visit {
+    #[serde(rename = "topCandidate")]
+    top_candidate: TopCandidate,
 }
 
-impl FromStr for JsonRecords {
-    type Err = Box<dyn std::error::Error>;
+#[derive(Deserialize)]
+struct TopCandidate {
+    #[serde(rename = "placeLocation")]
+    place_location: GeoLocation,
+}
+
+#[derive(Deserialize)]
+struct TimeLinePath {
+    point: GeoLocation,
+    #[serde(rename = "durationMinutesOffsetFromStartTime")]
+    duration_minutes_offset_from_start_time: String,
+}
+
+impl Into<PointsResult> for JsonRecord {
+    fn into(self) -> PointsResult {
+        let mut space_time_points = Vec::with_capacity(self.entries.len());
+        for entry in &self.entries {
+            space_time_points.extend(entry.to_space_time_points()?);
+        }
+        Ok(space_time_points)
+    }
+}
+
+enum EntryType {
+    Visit,
+    TimelinePath,
+    StartEnd,
+}
+
+impl JsonEntry {
+    pub fn to_space_time_points(&self) -> PointsResult {
+        // if self.start.is_some() || self.end.is_some() {
+        //     let mut geolocations = Vec::new();
+        //     if let Some(start) = &self.start {
+        //         geolocations.push(start.clone());
+        //     }
+        //     if let Some(end) = &self.end {
+        //         geolocations.push(end.clone());
+        //     }
+        //     return geolocations;
+        // }
+        // if let Some(visit) = &self.visit {
+        //     if let Some(top_candidate) = &visit.top_candidate {
+        //         return vec![top_candidate.place_location.clone()];
+        //     }
+        // }
+        // if let Some(timeline_path) = &self.timeline_path {
+        //     return timeline_path.iter().map(|tlp| tlp.point.clone()).collect();
+        // }
+        Ok(vec![])
+    }
+
+    fn get_entry_type(&self) -> Result<EntryType, DecoderError> {
+        if self.start.is_some() && self.end.is_some() {
+            Ok(EntryType::StartEnd)
+        } else if self.visit.is_some() {
+            Ok(EntryType::Visit)
+        } else if self.timeline_path.is_some() {
+            Ok(EntryType::TimelinePath)
+        } else {
+            Err(DecoderError::EmptyEntryError(format!("No Data Found for {:?}", self.start_time)))
+        }
+    }
+
+    //// Parse geolocation string
+    /// example: "geo:37.4219999,-122.0840576"
+    fn parse_geolocation(geolocation: &GeoLocation) -> Option<(f64, f64)> {
+        let parts: Vec<&str> = geolocation.split(',').collect();
+        if parts.len() == 2 {
+            let latitude = parts[0].trim_start_matches("geo:").parse::<f64>().ok();
+            let longitude = parts[1].parse::<f64>().ok();
+            match (latitude, longitude) {
+                (Some(lat), Some(lon)) => Some((lat, lon)),
+                _ => None,
+            }
+        } else {
+            None
+        }
+    }
+}
+
+impl FromStr for JsonRecord {
+    type Err = DecoderError;
     fn from_str(content: &str) -> Result<Self, Self::Err> {
-        let json_points: Vec<JsonPoint> = serde_json::from_str(content)?;
-        let points = json_points
-            .into_iter()
-            .map(|jp| Ok(SpaceTimePoint{
-                start_time: jp.start_time.parse()?,
-                end_time: jp.end_time.parse()?,
-                longitude: jp.longitude,
-                latitude: jp.latitude,
-            }))
-            .collect::<Result<Vec<_>, Self::Err>>();
-        Ok(JsonRecords {points: points?})
+        Ok(JsonRecord{  entries: serde_json::from_str(content)? })
     }
 }
 
-impl LocationRecords for JsonRecords {
-    fn get_points(&self) -> &[SpaceTimePoint] {
-        &self.points
-    }
-
-    fn get_point_at_index(&self, index: usize) -> Option<&SpaceTimePoint> {
-        self.points.get(index)
-    }
-
-    fn total_points(&self) -> usize {
-        self.points.len()
+impl From<serde_json::Error> for DecoderError {
+    fn from(err: serde_json::Error) -> Self {
+        DecoderError::DeserializeError(err.to_string())
     }
 }

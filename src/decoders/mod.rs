@@ -1,50 +1,63 @@
 pub mod gpx;
 pub mod json;
+pub mod errors;
 
 use std::str::FromStr;
 use chrono::{DateTime, Utc};
-use enum_dispatch::enum_dispatch;
-use crate::decoders::{gpx::*, json::*};
+use crate::decoders::{json::*, gpx::*, errors::*};
 
+type RecordResult = Result<SpaceTimeRecord, DecoderError>;
+#[derive(Debug)]
+pub struct SpaceTimeRecord {
+    pub points: Vec<SpaceTimePoint>,
+    pub file_format: FileFormat,
+}
+
+type PointsResult = Result<Vec<SpaceTimePoint>, DecoderError>;
 #[derive(Debug)]
 pub struct SpaceTimePoint {
     pub start_time: DateTime<Utc>,
     pub end_time: DateTime<Utc>,
     pub longitude: f64,
     pub latitude: f64,
-
 }
 
-#[enum_dispatch]
-pub trait LocationRecords {
-    fn get_points(&self) -> &[SpaceTimePoint];
-    fn get_point_at_index(&self, index: usize) -> Option<&SpaceTimePoint>;
-    fn total_points(&self) -> usize;
-}
-
-#[enum_dispatch(LocationRecords,FromStr)]
 #[derive(Debug)]
-pub enum RecordType where {
-    JsonRecords,
-    GpxRecords,
-}
-
 pub enum FileFormat {
     Json,
     Gpx,
 }
 
-pub fn to_record(format: FileFormat, content: &str) -> Result<RecordType, Box<dyn std::error::Error>> {
-    match format {
-        FileFormat::Json => Ok(RecordType::from(JsonRecords::from_str(content)?)),
-        FileFormat::Gpx => Ok(RecordType::from(GpxRecords::from_str(content)?)),
+impl SpaceTimeRecord {
+    pub fn new(content: &str, format: FileFormat) -> RecordResult {
+        let points: PointsResult = match format {
+            FileFormat::Json => JsonRecord::from_str(content)?.into(),
+            FileFormat::Gpx => GpxRecords::from_str(content)?.into(),
+        };
+        match points {
+            Ok(points) => 
+            {
+                debug_assert!(points.windows(2).all(|w| w[0].end_time <= w[1].start_time));
+                Ok(SpaceTimeRecord {points, file_format: format})
+            },
+            Err(e) => Err(e),
+        }
     }
-}
 
-pub fn to_format(record: &RecordType) -> FileFormat {
-    match record {
-        RecordType::JsonRecords(_) => FileFormat::Json,
-        RecordType::GpxRecords(_) => FileFormat::Gpx,
+    pub fn get_points(&self) -> &[SpaceTimePoint] {
+        &self.points
+    }
+
+    fn get_point_at_index(&self, index: usize) -> Option<&SpaceTimePoint> {
+        self.points.get(index)
+    }
+
+    fn total_points(&self) -> usize {
+        self.points.len()
+    }
+
+    fn get_file_format(&self) -> &FileFormat {
+        &self.file_format
     }
 }
 
@@ -55,19 +68,54 @@ mod tests {
     #[test]
     fn test_json_decoder() {
         let json_content = r#"
-    [
-        {
-            "start_time": "2023-03-25T09:00:00Z",
-            "end_time": "2023-03-25T09:15:00Z",
-            "longitude": 125.6,
-            "latitude": 10.1
-        }
-    ]
-    "#.to_string();
+            [
+                {
+                    "endTime": "2015-01-25T09:11:16.547-08:00",
+                    "startTime": "2015-01-24T20:16:07.217-08:00",
+                    "visit": {
+                        "hierarchyLevel": "0",
+                        "topCandidate": {
+                            "probability": "0.999080",
+                            "semanticType": "Unknown",
+                            "placeID": "R3DACT3D",
+                            "placeLocation": "geo:35.456789,-120.567890"
+                        },
+                        "probability": "0.780000"
+                    }
+                },
+                {
+                    "endTime" : "2016-06-11T10:59:38.241-04:00",
+                    "startTime" : "2016-06-11T10:37:59.047-04:00",
+                    "activity" : {
+                    "end" : "geo:38.765432,-76.987654",
+                    "topCandidate" : {
+                        "type" : "in passenger vehicle",
+                        "probability" : "0.000000"
+                    },
+                    "distanceMeters" : "3146.000000",
+                    "start" : "geo:38.812345,-77.039527"
+                    }
+                },
+                {
+                    "endTime" : "2017-08-15T08:00:00.000Z",
+                    "startTime" : "2017-08-15T06:00:00.000Z",
+                    "timelinePath" : [
+                    {
+                        "point" : "geo:37.654321,-122.345678",
+                        "durationMinutesOffsetFromStartTime" : "56"
+                    },
+                    {
+                        "point" : "geo:37.657890,-122.341234",
+                        "durationMinutesOffsetFromStartTime" : "59"
+                    }
+                    ]
+                }
+            ]
+        "#;
 
-        let decoded_data = to_record(FileFormat::Json, &json_content).expect("Failed to parse JSON content");
+        let decoded_data = SpaceTimeRecord::new(json_content, FileFormat::Json).expect("Failed to parse JSON content");
         let points = decoded_data.get_points();
-        assert_eq!(points.len(), 1);
+        assert_eq!(points.len(), 5);
         // Add more specific assertions based on the expected decoded data
     }
 
@@ -86,7 +134,7 @@ mod tests {
         </gpx>
         "#.to_string();
 
-        let decoded_data = to_record(FileFormat::Gpx, &gpx_content).expect("Failed to parse GPX content");
+        let decoded_data = SpaceTimeRecord::new(&gpx_content, FileFormat::Gpx).expect("Failed to parse GPX content");
         let points = decoded_data.get_points();
         assert_eq!(points.len(), 1);
         // Add more specific assertions based on the expected decoded data

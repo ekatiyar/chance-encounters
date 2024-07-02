@@ -1,17 +1,15 @@
-use std::str::FromStr;
-use crate::decoders::{LocationRecords, SpaceTimePoint};
-use quick_xml::de::from_str;
+use super::*;
 use serde::Deserialize;
 use chrono::{DateTime, Utc};
+use quick_xml::{de, DeError};
 
-#[derive(Debug)]
+#[derive(Debug, Deserialize)]
 pub struct GpxRecords {
-    points: Vec<SpaceTimePoint>,
+    trk: Vec<Track>,
 }
 
 #[derive(Debug, Deserialize)]
 struct Gpx {
-    trk: Vec<Track>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -33,46 +31,51 @@ struct TrackPoint {
     time: String,
 }
 
-impl FromStr for GpxRecords {
-    type Err = Box<dyn std::error::Error>;
-    fn from_str(content: &str) -> Result<Self, Self::Err> {
-        let gpx: Gpx = from_str(content)?;
-        let mut points = Vec::new();
-
-        for track in gpx.trk {
-            for segment in track.trkseg {
-                for (i, point) in segment.trkpt.iter().enumerate() {
-                    let start_time: DateTime<Utc> = point.time.parse()?;
-                    let end_time = if i + 1 < segment.trkpt.len() {
-                        segment.trkpt[i + 1].time.parse()?
-                    } else {
-                        start_time // Use the same time for the last point
-                    };
-
-                    points.push(SpaceTimePoint {
-                        start_time,
-                        end_time,
-                        latitude: point.lat,
-                        longitude: point.lon,
-                    });
-                }
-            }
+impl Into<PointsResult> for GpxRecords {
+    fn into(self) -> PointsResult {
+        let mut space_time_points = Vec::with_capacity(self.trk.len());
+        for track in &self.trk {
+            space_time_points.extend(track.to_space_time_points()?);
         }
-
-        Ok(GpxRecords { points })
+        Ok(space_time_points)
     }
 }
 
-impl LocationRecords for GpxRecords {
-    fn get_points(&self) -> &[SpaceTimePoint] {
-        &self.points
-    }
+impl Track {
+    pub fn to_space_time_points(&self) -> Result<Vec<SpaceTimePoint>, DecoderError> {
+        let mut points = Vec::new();
 
-    fn get_point_at_index(&self, index: usize) -> Option<&SpaceTimePoint> {
-        self.points.get(index)
-    }
+        for segment in &self.trkseg {
+            for (i, point) in segment.trkpt.iter().enumerate() {
+                let start_time: DateTime<Utc> = point.time.parse()?;
+                let end_time = if i + 1 < segment.trkpt.len() {
+                    segment.trkpt[i + 1].time.parse()?
+                } else {
+                    start_time // Use the same time for the last point
+                };
 
-    fn total_points(&self) -> usize {
-        self.points.len()
+                points.push(SpaceTimePoint {
+                    start_time,
+                    end_time,
+                    latitude: point.lat,
+                    longitude: point.lon,
+                });
+            }
+        }
+
+        Ok(points)
+    }
+}
+
+impl FromStr for GpxRecords {
+    type Err = DecoderError;
+    fn from_str(content: &str) -> Result<Self, Self::Err> {
+        de::from_str(content)?
+    }
+}
+
+impl From<quick_xml::DeError> for DecoderError {
+    fn from(err: DeError) -> Self {
+        DecoderError::DeserializeError(err.to_string())
     }
 }
