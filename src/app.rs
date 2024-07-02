@@ -1,5 +1,7 @@
 use leptos::*;
-use crate::{decoders::*, utils::{fileutils::*, *}};
+use crate::errors::Error;
+use crate::decoders::*;
+use crate::utils::{fileutils::*, *, errors::FileProcessingError};
 
 #[component]
 pub fn App() -> impl IntoView {
@@ -21,17 +23,21 @@ fn Home(button_clicked: ReadSignal<bool>) -> impl IntoView {
     let file1_ref = create_node_ref::<html::Input>();
     let file2_ref = create_node_ref::<html::Input>();
 
-    let (file1_result, set_file1_result) = create_signal::<FileResult>(Err(String::new()));
-    let (file2_result, set_file2_result) = create_signal::<FileResult>(Err(String::new()));
+    let (file1_result, set_file1_result) = create_signal::<FileResult>(Err(FileProcessingError::InProcessError));
+    let (file2_result, set_file2_result) = create_signal::<FileResult>(Err(FileProcessingError::InProcessError));
     
     // Function to handle the Analyze button click
     let analyze = move |_| {
         // Reset the results
-        set_file1_result.set_untracked(Err(String::new()));
-        set_file2_result.set_untracked(Err(String::new()));
-        use_context::<WriteSignal<Vec<String>>>().unwrap().update(|messages| messages.clear());
+        set_file1_result.set_untracked(Err(FileProcessingError::InProcessError));
+        set_file2_result.set_untracked(Err(FileProcessingError::InProcessError));
+        use_context::<WriteSignal<ErrorMessages>>().unwrap().update(|messages| messages.clear());
+
         set_processing(true);
-        extract_file_data(&file1_ref, &file2_ref, set_file1_result, set_file2_result);
+        match extract_file_data(&file1_ref, &file2_ref, set_file1_result, set_file2_result) {
+            Ok(()) => (),
+            Err(e) => end_processing(Error::from(e))
+        }
     };
     
     view! {
@@ -64,29 +70,6 @@ fn Home(button_clicked: ReadSignal<bool>) -> impl IntoView {
     }
 }
 
-fn extract_file_data(
-    file1_ref: &NodeRef<html::Input>,
-    file2_ref: &NodeRef<html::Input>,
-    file1_setter: WriteSignal<FileResult>,
-    file2_setter: WriteSignal<FileResult>) {
-    let file1_input = file1_ref.get().unwrap();
-        let file2_input = file2_ref.get().unwrap();
-
-        if let (Some(file1), Some(file2)) = (
-            file1_input.files().and_then(|list| list.get(0)),
-            file2_input.files().and_then(|list| list.get(0)),
-        ) {
-            // Read and parse the files
-            let filename1 = get_filename(&file1_ref.get().unwrap().value()).unwrap();
-            let filename2 = get_filename(&file2_ref.get().unwrap().value()).unwrap();
-
-            read_and_parse_file(FileDesc{filename: filename1, file: file1}, file1_setter);
-            read_and_parse_file(FileDesc{filename: filename2, file: file2}, file2_setter);
-        } else {
-            end_processing("Please provide both files.".to_string());
-        }
-}
-
 #[component]
 fn LoadingSpinner() -> impl IntoView {
     view! {
@@ -96,17 +79,17 @@ fn LoadingSpinner() -> impl IntoView {
     }
 }
 
-fn process_data(file1: String, file2: String) -> String
+fn process_data(file1: FileContent, file2: FileContent) -> String
 {
-    let record1 = to_record(FileFormat::Json, &file1);
+    let record1 = SpaceTimeRecord::new(&file1.content, FileFormat::Json);
     match record1 {
         Ok(record) => logging::log!("Record: {:?}", record.get_points()),
-        Err(error) => end_processing(error.to_string()),
+        Err(error) => end_processing(Error::from(error)),
     }
-    let record2 = to_record(FileFormat::Json, &file2);
+    let record2 = SpaceTimeRecord::new(&file2.content, FileFormat::Json);
     match record2 {
         Ok(record) => logging::log!("Record: {:?}", record),
-        Err(error) => end_processing(error.to_string()),
+        Err(error) => end_processing(Error::from(error)),
     }
 
     String::new()
@@ -122,16 +105,16 @@ fn ResultDisplay(file1_result: ReadSignal<FileResult>, file2_result: ReadSignal<
             match file1_result.get() {
                 Ok(_) => (),
                 Err(error) => {
-                    if !error.is_empty() {
-                        end_processing(error);
+                    if !error.is_processing() {
+                        end_processing(Error::from(error));
                     }
                 }
             };
             match file2_result.get() {
                 Ok(_) => (),
                 Err(error) => {
-                    if !error.is_empty() {
-                        end_processing(error);
+                    if !error.is_processing() {
+                        end_processing(Error::from(error));
                     }
                 }
             };
@@ -149,7 +132,7 @@ fn ResultDisplay(file1_result: ReadSignal<FileResult>, file2_result: ReadSignal<
 }
 
 #[component]
-fn ErrorAlerts(error_messages: ReadSignal<Vec<String>>) -> impl IntoView {
+fn ErrorAlerts(error_messages: ReadSignal<ErrorMessages>) -> impl IntoView {
     view! {
         <div class="toast toast-top toast-end">
         {
@@ -159,7 +142,7 @@ fn ErrorAlerts(error_messages: ReadSignal<Vec<String>>) -> impl IntoView {
                         <svg xmlns="(link unavailable)" fill="none" viewBox="0 0 24 24" class="stroke-current inline-block w-6 h-6">
                             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
                         </svg>
-                        <span>{error_message}</span>
+                        <span>{format!("{}", error_message)}</span>
                     </div>
                 </div>
             }).collect_view()
