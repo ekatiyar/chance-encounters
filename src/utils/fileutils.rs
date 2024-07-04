@@ -3,7 +3,7 @@ use super::errors::FileProcessingError;
 use wasm_bindgen::prelude::*;
 use leptos::*;
 
-// Function to get filename from path
+/// Get filename from path
 pub fn get_filename(path: &str) -> Result<String, FileProcessingError> {
     if !(path.is_empty() || path.ends_with('/') || path.ends_with('\\')) {
         match path.replace('\\', "/").split('/').last() {
@@ -42,7 +42,7 @@ pub fn extract_file_data(file1_ref: &NodeRef<html::Input>, file2_ref: &NodeRef<h
     }
 }
 
-// Function to read and parse a file to json
+/// Read a file and return it's contents as a string
 pub fn read_and_parse_file(filename: String, file: File, set_file_out: WriteSignal<FileResult>) -> Result<(), FileProcessingError> {
     let file_reader = match FileReader::new() {
         Ok(file_reader) => file_reader,
@@ -57,7 +57,7 @@ pub fn read_and_parse_file(filename: String, file: File, set_file_out: WriteSign
                         Some(value_as_string) => {
                             match value_as_string.is_empty() {
                                 true => set_file_out.set(Err(FileProcessingError::FileReaderError(format!("{}: is empty file", filename)))),
-                                false => set_file_out.set(Ok(FileContent { filename: filename.clone(), content: value_as_string })) // Return filename as it has been moved here but we'll need to refer to it later
+                                false => set_file_out.set(Ok(FileContent { filename: filename.clone(), content: value_as_string })) // Clone filename as it has been moved here but we'll need to refer to it later
                             }
                         }
                         None => set_file_out.set(Err(FileProcessingError::FileReaderError(format!("{}: can not be parsed as string", filename))))

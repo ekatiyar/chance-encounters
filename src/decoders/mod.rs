@@ -18,8 +18,8 @@ type PointsResult = Result<Vec<SpaceTimePoint>, DecoderError>;
 pub struct SpaceTimePoint {
     pub start_time: DateTime<Utc>,
     pub end_time: DateTime<Utc>,
-    pub longitude: f64,
     pub latitude: f64,
+    pub longitude: f64,
 }
 
 #[derive(Debug)]
@@ -37,7 +37,7 @@ impl SpaceTimeRecord {
         match points {
             Ok(points) => 
             {
-                debug_assert!(points.windows(2).all(|w| w[0].end_time <= w[1].start_time));
+                debug_assert!(points.windows(2).all(|w| w[0].end_time <= w[1].start_time)); // Ensure points are sorted and don't overlap - removed in release mode
                 Ok(SpaceTimeRecord {points, file_format: format})
             },
             Err(e) => Err(e),
@@ -87,13 +87,13 @@ mod tests {
                     "endTime" : "2016-06-11T10:59:38.241-04:00",
                     "startTime" : "2016-06-11T10:37:59.047-04:00",
                     "activity" : {
-                    "end" : "geo:38.765432,-76.987654",
-                    "topCandidate" : {
-                        "type" : "in passenger vehicle",
-                        "probability" : "0.000000"
-                    },
-                    "distanceMeters" : "3146.000000",
-                    "start" : "geo:38.812345,-77.039527"
+                        "end" : "geo:38.765432,-76.987654",
+                        "topCandidate" : {
+                            "type" : "in passenger vehicle",
+                            "probability" : "0.000000"
+                        },
+                        "distanceMeters" : "3146.000000",
+                        "start" : "geo:38.812345,-77.039527"
                     }
                 },
                 {

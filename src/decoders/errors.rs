@@ -1,6 +1,6 @@
 use chrono::ParseError;
 use serde::Deserialize;
-use std::fmt;
+use std::{fmt, num::ParseIntError};
 
 # [derive(Debug, Deserialize, Clone)]
 pub enum DecoderError {
@@ -21,9 +21,14 @@ impl fmt::Display for DecoderError {
     }
 }
 
-
 impl From<ParseError> for DecoderError {
     fn from(err: ParseError) -> Self {
+        DecoderError::TimeParseError(err.to_string())
+    }
+}
+
+impl From<ParseIntError> for DecoderError {
+    fn from(err: ParseIntError) -> Self {
         DecoderError::TimeParseError(err.to_string())
     }
 }
