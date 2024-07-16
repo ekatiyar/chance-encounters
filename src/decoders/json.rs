@@ -97,13 +97,12 @@ impl JsonEntry {
         let mut last_point_end_time = path_start_time;
         for (i, timeline_point) in timeline.iter().enumerate() {
             let geo_location = JsonEntry::parse_geolocation(&timeline_point.point)?;
-            let point_end_time = match i + 1 {
-                timeline_len => path_end_time,
-                _ => {
+            let point_end_time = if i + 1 == timeline_len {
+                    path_end_time
+                } else {
                     let start_time_minutes_offset: i64 = timeline_point.duration_minutes_offset_from_start_time.parse()?;
                     path_start_time + Duration::minutes(start_time_minutes_offset)
-                }
-            };
+                };
             space_time_points.push(SpaceTimePoint{start_time: last_point_end_time, end_time: point_end_time, latitude: geo_location.0, longitude: geo_location.1});
             last_point_end_time = point_end_time;
         }

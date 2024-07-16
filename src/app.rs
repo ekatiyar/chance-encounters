@@ -1,6 +1,7 @@
 use leptos::*;
 use crate::errors::Error;
 use crate::decoders::*;
+use crate::model::*;
 use crate::utils::{fileutils::*, *, errors::FileProcessingError};
 
 #[component]
@@ -70,25 +71,16 @@ fn Home(button_clicked: ReadSignal<bool>) -> impl IntoView {
     }
 }
 
-#[component]
-fn LoadingSpinner() -> impl IntoView {
-    view! {
-        <div class="flex justify-center items-center">
-            <span class="loading loading-dots loading-lg"></span>
-        </div>
-    }
-}
-
 fn process_data(file1: FileContent, file2: FileContent) -> String
 {
     let record1 = SpaceTimeRecord::new(&file1.content, FileFormat::Json);
     match record1 {
-        Ok(record) => logging::log!("Record: {:?}", record.get_points()),
+        Ok(record) => logging::log!("Record: {:?}", record.points),
         Err(error) => end_processing(Error::from(error)),
     }
     let record2 = SpaceTimeRecord::new(&file2.content, FileFormat::Json);
     match record2 {
-        Ok(record) => logging::log!("Record: {:?}", record),
+        Ok(record) => logging::log!("Record: {:?}", record.points),
         Err(error) => end_processing(Error::from(error)),
     }
 
@@ -128,6 +120,15 @@ fn ResultDisplay(file1_result: ReadSignal<FileResult>, file2_result: ReadSignal<
                     </div>
             </div>
         </Show>
+    }
+}
+
+#[component]
+fn LoadingSpinner() -> impl IntoView {
+    view! {
+        <div class="flex justify-center items-center">
+            <span class="loading loading-dots loading-lg"></span>
+        </div>
     }
 }
 

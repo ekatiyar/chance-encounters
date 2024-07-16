@@ -4,23 +4,11 @@ pub mod errors;
 
 use std::str::FromStr;
 use chrono::{DateTime, Utc};
+use crate::model::{SpaceTimePoint, SpaceTimeRecord};
 use crate::decoders::{json::*, gpx::*, errors::*};
 
 type RecordResult = Result<SpaceTimeRecord, DecoderError>;
-#[derive(Debug)]
-pub struct SpaceTimeRecord {
-    pub points: Vec<SpaceTimePoint>,
-    pub file_format: FileFormat,
-}
-
 type PointsResult = Result<Vec<SpaceTimePoint>, DecoderError>;
-#[derive(Debug)]
-pub struct SpaceTimePoint {
-    pub start_time: DateTime<Utc>,
-    pub end_time: DateTime<Utc>,
-    pub latitude: f64,
-    pub longitude: f64,
-}
 
 #[derive(Debug)]
 pub enum FileFormat {
@@ -38,26 +26,10 @@ impl SpaceTimeRecord {
             Ok(points) => 
             {
                 debug_assert!(points.windows(2).all(|w| w[0].end_time <= w[1].start_time)); // Ensure points are sorted and don't overlap - removed in release mode
-                Ok(SpaceTimeRecord {points, file_format: format})
+                Ok(SpaceTimeRecord {points})
             },
             Err(e) => Err(e),
         }
-    }
-
-    pub fn get_points(&self) -> &[SpaceTimePoint] {
-        &self.points
-    }
-
-    fn get_point_at_index(&self, index: usize) -> Option<&SpaceTimePoint> {
-        self.points.get(index)
-    }
-
-    fn total_points(&self) -> usize {
-        self.points.len()
-    }
-
-    fn get_file_format(&self) -> &FileFormat {
-        &self.file_format
     }
 }
 
@@ -114,7 +86,7 @@ mod tests {
         "#;
 
         let decoded_data = SpaceTimeRecord::new(json_content, FileFormat::Json).expect("Failed to parse JSON content");
-        let points = decoded_data.get_points();
+        let points = decoded_data.points;
         assert_eq!(points.len(), 5);
         // Add more specific assertions based on the expected decoded data
     }
@@ -135,7 +107,7 @@ mod tests {
         "#.to_string();
 
         let decoded_data = SpaceTimeRecord::new(&gpx_content, FileFormat::Gpx).expect("Failed to parse GPX content");
-        let points = decoded_data.get_points();
+        let points = decoded_data.points;
         assert_eq!(points.len(), 1);
         // Add more specific assertions based on the expected decoded data
     }

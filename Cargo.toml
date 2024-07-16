@@ -14,3 +14,4 @@ web-sys = { version = "0.3.69", features = ["File", "FileList", "FileReader", "B
 chrono = "0.4.38"
 serde = "1.0.203"
 quick-xml = { version = "0.35.0", features = ["serialize"] }
+rstar = "0.12.0"
