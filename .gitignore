@@ -1,5 +1,6 @@
 /target
 /dist
+/test_data
 
 package-lock.json
 node_modules

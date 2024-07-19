@@ -21,6 +21,12 @@ impl fmt::Display for DecoderError {
     }
 }
 
+impl From<serde_json::Error> for DecoderError {
+    fn from(err: serde_json::Error) -> Self {
+        DecoderError::DeserializeError(err.to_string())
+    }
+}
+
 impl From<ParseError> for DecoderError {
     fn from(err: ParseError) -> Self {
         DecoderError::TimeParseError(err.to_string())
