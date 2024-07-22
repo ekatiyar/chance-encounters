@@ -2,6 +2,7 @@ pub mod fileutils;
 pub mod errors;
 
 use leptos::*;
+use shrinkwraprs::Shrinkwrap;
 use crate::errors::Error;
 
 enum SupportedInportTypes {
@@ -9,7 +10,9 @@ enum SupportedInportTypes {
     GPSTrackGPX,
 }
 
-pub type ErrorMessages = Vec<Error>;
+#[derive(Shrinkwrap, Clone)]
+#[shrinkwrap(mutable)]
+pub struct ErrorMessages(pub Vec<Error>);
 pub fn log_error(error: Error) {
     use_context::<WriteSignal<ErrorMessages>>().expect("Unable to find contextual signal for ErrorMessages").update(|messages| messages.push(error));
 }

@@ -3,6 +3,7 @@ use std::str::FromStr;
 use serde::Deserialize;
 use serde_json;
 use chrono::{Duration, DateTime, Utc};
+use shrinkwraprs::Shrinkwrap;
 
 #[derive(Deserialize)]
 #[serde(untagged)]
@@ -50,8 +51,10 @@ impl FromStr for JsonRecord {
     }
 }
 
-type TimestampRfc3339 = String;
-type GeoLocationE7 = i64;
+#[derive(Shrinkwrap, Debug, Deserialize)]
+struct TimestampRfc3339(String);
+#[derive(Shrinkwrap, Deserialize, Debug)]
+struct GeoLocationE7(i64);
 
 #[derive(Deserialize)]
 pub struct TimeLineObjects
@@ -254,11 +257,12 @@ impl LocationEntry {
             return Ok(parse_timestamp_str(timestamp)?);
         }
 
-        return Err(DecoderError::TimeParseError(format!("Location {}, {} missing timestamp", self.latitude_e7, self.longitude_e7)));
+        return Err(DecoderError::TimeParseError(format!("Location {:?}, {:?} missing timestamp", self.latitude_e7, self.longitude_e7)));
     }
 }
 
-type GeoLocation = String;
+#[derive(Shrinkwrap, Deserialize, Debug)]
+struct GeoLocation(String);
 #[derive(Deserialize, Debug)]
 pub struct JsonEntry {
     #[serde(rename = "startTime")]
@@ -389,7 +393,7 @@ impl JsonEntry {
                 _ => ()
             }
         }
-        Err(DecoderError::GeoParseError(format!("Unable to parse location string {}", geolocation)))
+        Err(DecoderError::GeoParseError(format!("Unable to parse location string {:?}", geolocation)))
     }
 }
 
@@ -405,9 +409,9 @@ fn parse_timestamp_str(timestamp: &TimestampRfc3339) -> Result<DateTime<Utc>, De
 // example: 374219999 -> 37.4219999
 fn parse_geolocation_e7(geolocation_e7: &GeoLocationE7) -> Result<f64, DecoderError> {
     if geolocation_e7.to_string().len() <= 7 {
-        return Err(DecoderError::GeoParseError(format!("Geographic Coordinate {} has too few digits", geolocation_e7)));
+        return Err(DecoderError::GeoParseError(format!("Geographic Coordinate {:?} has too few digits", geolocation_e7)));
     }
-    Ok((*geolocation_e7 as f64) / 1E7)
+    Ok((*geolocation_e7.as_ref() as f64) / 1E7)
 }
 
 #[cfg(test)]
@@ -416,17 +420,25 @@ mod tests {
 
     #[test]
     fn test_parse_timestamp_str() {
-        let timestamp = "2015-01-25T09:11:16.547-08:00";
-        let dt = parse_timestamp_str(&timestamp.to_string());
+        let timestamp = TimestampRfc3339("2015-01-25T09:11:16.547-08:00".to_string());
+        let dt = parse_timestamp_str(&timestamp);
         assert!(dt.is_ok());
         assert_eq!(dt.unwrap().format("%Y-%m-%dT%H:%M:%S%.3f%:z").to_string(), "2015-01-25T17:11:16.547+00:00");
     }
 
     #[test]
     fn test_parse_geolocation_e7() {
-        let geolocation_e7 = 374219999;
+        let geolocation_e7 = GeoLocationE7(374219999);
         let geolocation = parse_geolocation_e7(&geolocation_e7);
         assert!(geolocation.is_ok());
         assert_eq!(geolocation.unwrap(), 37.4219999);
+    }
+
+    #[test]
+    fn test_parse_geolocation() {
+        let geolocation = GeoLocation("geo:37.4219999,-122.0840576".to_string());
+        let geolocation = JsonEntry::parse_geolocation(&geolocation);
+        assert!(geolocation.is_ok());
+        assert_eq!(geolocation.unwrap(), (37.4219999, -122.0840576));
     }
 }

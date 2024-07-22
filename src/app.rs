@@ -7,7 +7,7 @@ use crate::utils::{fileutils::*, *, errors::FileProcessingError};
 #[component]
 pub fn App() -> impl IntoView {
     // Signal to track if both files are provided
-    let (error_messages, set_error_messages) = create_signal::<ErrorMessages>(ErrorMessages::new());
+    let (error_messages, set_error_messages) = create_signal::<ErrorMessages>(ErrorMessages(vec![]));
     let (processing_files, set_processing_files) = create_signal(false);
     provide_context(set_error_messages);
     provide_context(set_processing_files);
@@ -137,7 +137,7 @@ fn ErrorAlerts(error_messages: ReadSignal<ErrorMessages>) -> impl IntoView {
     view! {
         <div class="toast toast-top toast-end">
         {
-            move || error_messages.get().into_iter().map(|error_message| view! {
+            move || error_messages.get().as_ref().into_iter().map(|error_message| view! {
                 <div class="alert alert-error alert-sm shadow-lg">
                     <div>
                         <svg xmlns="(link unavailable)" fill="none" viewBox="0 0 24 24" class="stroke-current inline-block w-6 h-6">
