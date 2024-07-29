@@ -8,12 +8,12 @@ use crate::utils::{fileutils::*, *, errors::FileProcessingError};
 pub fn App() -> impl IntoView {
     // Signal to track if both files are provided
     let (error_messages, set_error_messages) = create_signal::<ErrorMessages>(ErrorMessages(vec![]));
-    let (processing_files, set_processing_files) = create_signal(false);
+    let (button_clicked, set_button_clicked) = create_signal(false);
     provide_context(set_error_messages);
-    provide_context(set_processing_files);
+    provide_context(set_button_clicked);
 
     view! {
-        <Home button_clicked=processing_files/>
+        <Home button_clicked=button_clicked/>
         <ErrorAlerts error_messages/>
     }
 }
@@ -26,19 +26,22 @@ fn Home(button_clicked: ReadSignal<bool>) -> impl IntoView {
 
     let (file1_result, set_file1_result) = create_signal::<FileResult>(Err(FileProcessingError::InProcessError));
     let (file2_result, set_file2_result) = create_signal::<FileResult>(Err(FileProcessingError::InProcessError));
-    
-    // Function to handle the Analyze button click
-    let analyze = move |_| {
-        // Reset the results
+
+    // Load files when the button is clicked
+    let load_files = move |_| {
         set_file1_result.set_untracked(Err(FileProcessingError::InProcessError));
         set_file2_result.set_untracked(Err(FileProcessingError::InProcessError));
-        use_context::<WriteSignal<ErrorMessages>>().unwrap().update(|messages| messages.clear());
+        clear_error_messages();
 
+        let (file_info1, file_info2) = match (get_file_info(&file1_ref), get_file_info(&file2_ref)) {
+            (Ok(file1), Ok(file2)) => (file1, file2),
+            (Err(err), _) | (_, Err(err)) => return end_processing(Error::from(err)),
+        };
+        match (process_file(file_info1, set_file1_result), process_file(file_info2, set_file2_result)) {
+            (Ok(_), Ok(_)) => (),
+            (Err(err), _) | (_, Err(err)) => return end_processing(Error::from(err)),
+        };
         set_processing(true);
-        match extract_file_data(&file1_ref, &file2_ref, set_file1_result, set_file2_result) {
-            Ok(()) => (),
-            Err(e) => end_processing(Error::from(e))
-        }
     };
     
     view! {
@@ -63,7 +66,7 @@ fn Home(button_clicked: ReadSignal<bool>) -> impl IntoView {
                     <input type="file" class="file-input file-input-bordered w-full max-w-xs" node_ref={file2_ref} />
                 </div>
             </div>
-            <button class="btn btn-primary" on:click={analyze}> "Analyze" </button>
+            <button class="btn btn-primary" on:click={load_files}> "Analyze" </button>
             <Show when=move || button_clicked.get()>
                 <ResultDisplay file1_result=file1_result file2_result=file2_result/>
             </Show>
@@ -74,17 +77,25 @@ fn Home(button_clicked: ReadSignal<bool>) -> impl IntoView {
 fn process_data(file1: FileContent, file2: FileContent) -> String
 {
     let record1 = SpaceTimeRecord::new(&file1.content, FileFormat::Json);
-    match record1 {
+    match record1.as_ref() {
         Ok(record) => logging::log!("Record: {:?}", record.points),
-        Err(error) => end_processing(Error::from(error)),
+        Err(error) => {
+            end_processing(Error::from(error.clone()));
+            return String::new();
+        }
+
     }
     let record2 = SpaceTimeRecord::new(&file2.content, FileFormat::Json);
-    match record2 {
+    match record2.as_ref() {
         Ok(record) => logging::log!("Record: {:?}", record.points),
-        Err(error) => end_processing(Error::from(error)),
+        Err(error) => 
+        {
+            end_processing(Error::from(error.clone()));
+            return String::new();
+        }
     }
 
-    String::new()
+    format!("Data Processed. File1 {}, File2 {}", record1.unwrap().points.len(), record2.unwrap().points.len())
     // TODO: Implement actual analysis logic here
 }
 

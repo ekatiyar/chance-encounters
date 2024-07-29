@@ -17,6 +17,10 @@ pub fn log_error(error: Error) {
     use_context::<WriteSignal<ErrorMessages>>().expect("Unable to find contextual signal for ErrorMessages").update(|messages| messages.push(error));
 }
 
+pub fn clear_error_messages() {
+    use_context::<WriteSignal<ErrorMessages>>().expect("Unable to find contextual signal for ErrorMessages").update(|messages| messages.clear());
+}
+
 pub fn set_processing(processing: bool) {
     use_context::<WriteSignal<bool>>().expect("Unable to find contextual signal for Processing Flag").set(processing);
 }

@@ -15,35 +15,34 @@ pub fn get_filename(path: &str) -> Result<String, FileProcessingError> {
 }
 
 #[derive(Clone)]
+pub struct FileInfo {
+    pub filename: String,
+    pub blob: File
+}
+
+// Get FileInfo from NodeRef
+pub fn get_file_info(file_ref: &NodeRef<html::Input>) -> Result<FileInfo, FileProcessingError> {
+    let file_input =  match file_ref.get() {
+        Some(input) => input,
+        None => return Err(FileProcessingError::MissingFileError)
+    };
+    
+    match file_input.files().and_then(|list| list.get(0)) {
+        Some(file) => Ok(FileInfo{filename: get_filename(&file_input.value())?, blob: file}),
+        None => Err(FileProcessingError::MissingFileError)
+    }
+}
+
+#[derive(Clone, PartialEq)]
 pub struct FileContent {
     pub filename: String,
     pub content: String
 }
 pub type FileResult = Result<FileContent, FileProcessingError>;
 
-pub fn extract_file_data(file1_ref: &NodeRef<html::Input>, file2_ref: &NodeRef<html::Input>,
-                    file1_setter: WriteSignal<FileResult>, file2_setter: WriteSignal<FileResult>) -> Result<(),  FileProcessingError> {
-    let file1_input = file1_ref.get().unwrap();
-    let file2_input = file2_ref.get().unwrap();
-
-    if let (Some(file1), Some(file2)) = (
-        file1_input.files().and_then(|list| list.get(0)),
-        file2_input.files().and_then(|list| list.get(0)),
-    ) {
-        // Read and parse the files
-        let filename1 = get_filename(&file1_input.value())?;
-        let filename2 = get_filename(&file2_input.value())?;
-
-        read_and_parse_file(filename1, file1, file1_setter)?;
-        read_and_parse_file(filename2, file2, file2_setter)?;
-        Ok(())
-    } else {
-        Err(FileProcessingError::MissingFileError)
-    }
-}
-
-/// Read a file and return it's contents as a string
-pub fn read_and_parse_file(filename: String, file: File, set_file_out: WriteSignal<FileResult>) -> Result<(), FileProcessingError> {
+/// Read a file and set it's contents in a signal - this pattern sucks but seems to be the only way to do it
+pub fn process_file(file_info: FileInfo, set_file_out: WriteSignal<FileResult>) -> Result<(), FileProcessingError> {
+    let (file, filename) = (file_info.blob, file_info.filename);
     let file_reader = match FileReader::new() {
         Ok(file_reader) => file_reader,
         Err(err) => return Err(FileProcessingError::FileReaderError(format!("{}: {:#?}", filename, err)))
