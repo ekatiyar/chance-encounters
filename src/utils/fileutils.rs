@@ -1,3 +1,4 @@
+use serde::{Deserialize, Serialize};
 use web_sys::{File, FileReader};
 use super::errors::FileProcessingError;
 use wasm_bindgen::prelude::*;
@@ -33,11 +34,12 @@ pub fn get_file_info(file_ref: &NodeRef<html::Input>) -> Result<FileInfo, FilePr
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct FileContent {
     pub filename: String,
     pub content: String
 }
+pub type FileContents = Option<(FileContent, FileContent)>;
 pub type FileResult = Result<FileContent, FileProcessingError>;
 
 /// Read a file and set it's contents in a signal - this pattern sucks but seems to be the only way to do it

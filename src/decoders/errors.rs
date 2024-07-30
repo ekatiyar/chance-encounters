@@ -1,8 +1,8 @@
 use chrono::ParseError;
-use serde::Deserialize;
+use serde::{Serialize, Deserialize};
 use std::{fmt, num::ParseIntError};
 
-# [derive(Debug, Deserialize, Clone)]
+# [derive(Debug, Serialize,Deserialize, Clone)]
 pub enum DecoderError {
     DeserializeError(String),
     EmptyEntryError(String),

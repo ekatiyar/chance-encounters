@@ -1,6 +1,8 @@
 use std::fmt;
 
-#[derive(Debug, PartialEq, Clone)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, PartialEq, Clone, Serialize, Deserialize)]
 pub enum FileProcessingError {
     InvalidPathError(String),
     MissingFileError,

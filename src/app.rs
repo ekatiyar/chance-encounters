@@ -1,4 +1,5 @@
 use leptos::*;
+use leptos_workers::worker;
 use crate::errors::Error;
 use crate::decoders::*;
 use crate::model::*;
@@ -26,6 +27,12 @@ fn Home(button_clicked: ReadSignal<bool>) -> impl IntoView {
 
     let (file1_result, set_file1_result) = create_signal::<FileResult>(Err(FileProcessingError::InProcessError));
     let (file2_result, set_file2_result) = create_signal::<FileResult>(Err(FileProcessingError::InProcessError));
+    let file_contents = create_memo(move |_| {
+        match (file1_result.get(), file2_result.get()) {
+            (Ok(file1), Ok(file2)) => Some((file1, file2)),
+            _ => None
+        }
+    });
 
     // Load files when the button is clicked
     let load_files = move |_| {
@@ -38,8 +45,8 @@ fn Home(button_clicked: ReadSignal<bool>) -> impl IntoView {
             (Err(err), _) | (_, Err(err)) => return end_processing(Error::from(err)),
         };
         match (process_file(file_info1, set_file1_result), process_file(file_info2, set_file2_result)) {
-            (Ok(_), Ok(_)) => (),
             (Err(err), _) | (_, Err(err)) => return end_processing(Error::from(err)),
+            _ => (),
         };
         set_processing(true);
     };
@@ -68,20 +75,25 @@ fn Home(button_clicked: ReadSignal<bool>) -> impl IntoView {
             </div>
             <button class="btn btn-primary" on:click={load_files}> "Analyze" </button>
             <Show when=move || button_clicked.get()>
-                <ResultDisplay file1_result=file1_result file2_result=file2_result/>
+                <ResultDisplay file_contents/>
             </Show>
         </div>
     }
 }
 
-fn process_data(file1: FileContent, file2: FileContent) -> String
+#[worker(MyFutureWorker)]
+pub async fn process_data(files: FileContents) -> Result<String, Error>
 {
+    logging::log!("Inside WebWorker");
+    let (file1, file2) = match files {
+        Some((file1, file2)) => (file1, file2),
+        None => return Err(Error::from(FileProcessingError::MissingFileError))
+    };
     let record1 = SpaceTimeRecord::new(&file1.content, FileFormat::Json);
     match record1.as_ref() {
         Ok(record) => logging::log!("Record: {:?}", record.points),
         Err(error) => {
-            end_processing(Error::from(error.clone()));
-            return String::new();
+            return Err(Error::from(error.clone()))
         }
 
     }
@@ -90,47 +102,51 @@ fn process_data(file1: FileContent, file2: FileContent) -> String
         Ok(record) => logging::log!("Record: {:?}", record.points),
         Err(error) => 
         {
-            end_processing(Error::from(error.clone()));
-            return String::new();
+            return Err(Error::from(error.clone()))
         }
     }
 
-    format!("Data Processed. File1 {}, File2 {}", record1.unwrap().points.len(), record2.unwrap().points.len())
+    Ok(format!("Data Processed. File1 {}, File2 {}", record1.unwrap().points.len(), record2.unwrap().points.len()))
     // TODO: Implement actual analysis logic here
 }
 
 #[component]
-fn ResultDisplay(file1_result: ReadSignal<FileResult>, file2_result: ReadSignal<FileResult>) -> impl IntoView {
-    let derived_signal = create_memo(move |_| file1_result.get().is_ok() && file2_result.get().is_ok());
+fn ResultDisplay(file_contents: Memo<Option<(FileContent, FileContent)>>) -> impl IntoView {
+    let response = create_local_resource(move || {file_contents.get()}, process_data);
     view! {
-        <Show when=move || derived_signal.get() fallback=move || {
-            logging::log!("loading...");
-            match file1_result.get() {
-                Ok(_) => (),
-                Err(error) => {
-                    if !error.is_processing() {
-                        end_processing(Error::from(error));
+        {move || match response.get() {
+            None => view! { <LoadingSpinner /> },
+            Some(result) => {
+                match result {
+                    Ok(analysis_result) => match analysis_result {
+                        Ok(analysis_result) => view! { <AnalysisResult analysis_result/> },
+                        Err(error) => {
+                            end_processing(Error::from(error));
+                            // This won't be reached as ResultDisplay is hidden when end_processing is called
+                            view! { <LoadingSpinner /> }
+                        }
+                    },
+                    Err(error) => {
+                        end_processing(Error::WebWorkerError(error.to_string()));
+                        // This won't be reached as ResultDisplay is hidden when end_processing is called
+                        view! { <LoadingSpinner /> }
                     }
                 }
-            };
-            match file2_result.get() {
-                Ok(_) => (),
-                Err(error) => {
-                    if !error.is_processing() {
-                        end_processing(Error::from(error));
-                    }
-                }
-            };
-            view! { <LoadingSpinner /> } 
-        }>
-            <div class="mt-4 w-full">
-                <h2 class="text-xl font-bold mb-2">"Analysis Results"</h2>
-                    <h3 class="text-lg font-semibold mb-2">"File 1 Data"</h3>
-                    <div class="mockup-code h-64 overflow-auto">
-                        <pre><code>{process_data(file1_result.get().unwrap(), file2_result.get().unwrap())}</code></pre>
-                    </div>
+            }
+        }}
+    }
+}
+
+#[component]
+fn AnalysisResult(analysis_result: String) -> impl IntoView {
+    view! {
+        <div class="mt-4 w-full">
+        <h2 class="text-xl font-bold mb-2">"Analysis Results"</h2>
+            <h3 class="text-lg font-semibold mb-2">"File 1 Data"</h3>
+            <div class="mockup-code h-64 overflow-auto">
+                <pre><code>{analysis_result}</code></pre>
             </div>
-        </Show>
+        </div>
     }
 }
 
