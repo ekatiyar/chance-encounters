@@ -28,6 +28,7 @@ fn Home(button_clicked: ReadSignal<bool>) -> impl IntoView {
     let (file1_result, set_file1_result) = create_signal::<FileResult>(Err(FileProcessingError::InProcessError));
     let (file2_result, set_file2_result) = create_signal::<FileResult>(Err(FileProcessingError::InProcessError));
     let file_contents = create_memo(move |_| {
+        logging::log!("Inside Home. State of FileContents: {}, {}", file1_result.get().is_ok(), file2_result.get().is_ok());
         match (file1_result.get(), file2_result.get()) {
             (Ok(file1), Ok(file2)) => Some((file1, file2)),
             _ => None
@@ -36,8 +37,8 @@ fn Home(button_clicked: ReadSignal<bool>) -> impl IntoView {
 
     // Load files when the button is clicked
     let load_files = move |_| {
-        set_file1_result.set_untracked(Err(FileProcessingError::InProcessError));
-        set_file2_result.set_untracked(Err(FileProcessingError::InProcessError));
+        set_file1_result.set(Err(FileProcessingError::InProcessError));
+        set_file2_result.set(Err(FileProcessingError::InProcessError));
         clear_error_messages();
 
         let (file_info1, file_info2) = match (get_file_info(&file1_ref), get_file_info(&file2_ref)) {
@@ -84,11 +85,11 @@ fn Home(button_clicked: ReadSignal<bool>) -> impl IntoView {
 #[worker(MyFutureWorker)]
 pub async fn process_data(files: FileContents) -> Result<String, Error>
 {
-    logging::log!("Inside WebWorker");
     let (file1, file2) = match files {
         Some((file1, file2)) => (file1, file2),
         None => return Err(Error::from(FileProcessingError::MissingFileError))
     };
+    logging::log!("Inside WebWorker 1");
     let record1 = SpaceTimeRecord::new(&file1.content, FileFormat::Json);
     match record1.as_ref() {
         Ok(record) => logging::log!("Record: {:?}", record.points),
@@ -112,7 +113,9 @@ pub async fn process_data(files: FileContents) -> Result<String, Error>
 
 #[component]
 fn ResultDisplay(file_contents: Memo<Option<(FileContent, FileContent)>>) -> impl IntoView {
-    let response = create_local_resource(move || {file_contents.get()}, process_data);
+    let response = create_local_resource(|| {}, move |_| {
+        process_data(file_contents.get())
+    });
     view! {
         {move || match response.get() {
             None => view! { <LoadingSpinner /> },
@@ -121,7 +124,10 @@ fn ResultDisplay(file_contents: Memo<Option<(FileContent, FileContent)>>) -> imp
                     Ok(analysis_result) => match analysis_result {
                         Ok(analysis_result) => view! { <AnalysisResult analysis_result/> },
                         Err(error) => {
-                            end_processing(Error::from(error));
+                            match error {
+                                Error::FileProcessingError(FileProcessingError::MissingFileError) => {},
+                                _ => end_processing(error)
+                            }
                             // This won't be reached as ResultDisplay is hidden when end_processing is called
                             view! { <LoadingSpinner /> }
                         }
