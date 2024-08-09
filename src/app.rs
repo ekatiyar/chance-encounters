@@ -28,7 +28,7 @@ fn Home(button_clicked: ReadSignal<bool>) -> impl IntoView {
     let (file1_result, set_file1_result) = create_signal::<FileResult>(Err(FileProcessingError::InProcessError));
     let (file2_result, set_file2_result) = create_signal::<FileResult>(Err(FileProcessingError::InProcessError));
     let file_contents = create_memo(move |_| {
-        logging::log!("Inside Home. State of FileContents: {}, {}", file1_result.get().is_ok(), file2_result.get().is_ok());
+        logging::log!("Files Loaded: {}, {}", file1_result.get().is_ok(), file2_result.get().is_ok());
         match (file1_result.get(), file2_result.get()) {
             (Ok(file1), Ok(file2)) => Some((file1, file2)),
             _ => None
@@ -89,25 +89,11 @@ pub async fn process_data(files: FileContents) -> Result<String, Error>
         Some((file1, file2)) => (file1, file2),
         None => return Err(Error::from(FileProcessingError::MissingFileError))
     };
-    logging::log!("Inside WebWorker 1");
-    let record1 = SpaceTimeRecord::new(&file1.content, FileFormat::Json);
-    match record1.as_ref() {
-        Ok(record) => logging::log!("Record: {:?}", record.points),
-        Err(error) => {
-            return Err(Error::from(error.clone()))
-        }
+    logging::log!("Running WebWorker...");
+    let record1 = SpaceTimeRecord::new(&file1.content, FileFormat::Json)?;
+    let record2 = SpaceTimeRecord::new(&file2.content, FileFormat::Json)?;
 
-    }
-    let record2 = SpaceTimeRecord::new(&file2.content, FileFormat::Json);
-    match record2.as_ref() {
-        Ok(record) => logging::log!("Record: {:?}", record.points),
-        Err(error) => 
-        {
-            return Err(Error::from(error.clone()))
-        }
-    }
-
-    Ok(format!("Data Processed. File1 {}, File2 {}", record1.unwrap().points.len(), record2.unwrap().points.len()))
+    Ok(format!("Data Processed. File1 {}, File2 {}", record1.points.len(), record2.points.len()))
     // TODO: Implement actual analysis logic here
 }
 

@@ -87,8 +87,10 @@ struct ActivitySegment
     #[serde(rename = "endLocation")]
     end_location: Location,
     duration: JsonDuration,
+    #[serde(rename = "simplifiedRawPath")]
+    simplified_raw_path: Option<SimplifiedRawPath>,
     #[serde(rename = "waypointPath")]
-    waypoint_path: WaypointPath
+    waypoint_path: Option<WaypointPath>
 }
 
 #[derive(Deserialize)]
@@ -110,6 +112,20 @@ struct JsonDuration
 }
 
 #[derive(Deserialize)]
+struct SimplifiedRawPath
+{
+    points: Vec<RawPoint>
+}
+
+#[derive(Deserialize)]
+struct RawPoint
+{
+    #[serde(flatten)]
+    location: Location,
+    timestamp: TimestampRfc3339
+}
+
+#[derive(Deserialize)]
 struct WaypointPath
 {
     waypoints: Vec<Location>
@@ -119,6 +135,13 @@ enum TimelineType
 {
     PlaceVisit,
     ActivitySegment
+}
+
+enum PointType
+{
+    RawPoints,
+    Waypoints,
+    NoPoints
 }
 
 impl IntoSpaceTimePoints for TimelineObject
@@ -155,9 +178,15 @@ impl TimelineObject
 
         let start_time = parse_timestamp_str(&activity_segment.duration.start_timestamp)?;
         let end_time = parse_timestamp_str(&activity_segment.duration.end_timestamp)?;
+
+        let point_type = self.get_point_type()?;
         
-        let num_points = 2 + activity_segment.waypoint_path.waypoints.len();
-        let segment_duration = (end_time - start_time) / (num_points as i32);
+        let num_points = 2 + match point_type {
+            PointType::Waypoints => activity_segment.waypoint_path.as_ref().expect("PointType is classified as Waypoints but is None").waypoints.len(),
+            PointType::RawPoints => activity_segment.simplified_raw_path.as_ref().expect("PointType is classified as RawPoints but is None").points.len(),
+            _ => 0
+        };
+        let segment_duration = (end_time - start_time) / (num_points as i32); // Unused for RawPoints
 
         let mut space_time_points = Vec::with_capacity(num_points);
         let mut last_point_end_time = start_time;
@@ -166,7 +195,22 @@ impl TimelineObject
                 end_time
             }
             else {
-                last_point_end_time + segment_duration
+                match point_type {
+                    PointType::RawPoints => {
+                        let cur_time = if i == 0 {
+                            start_time
+                        } else {
+                            parse_timestamp_str(&activity_segment.simplified_raw_path.as_ref().expect("PointType is classified as RawPoints but is None").points[i-1].timestamp)?
+                        };
+                        let next_time = if i == num_points - 2 {
+                            end_time
+                        } else {
+                            parse_timestamp_str(&activity_segment.simplified_raw_path.as_ref().expect("PointType is classified as RawPoints but is None").points[i].timestamp)?
+                        };
+                        cur_time + (next_time - cur_time) / 2
+                    }
+                    _ => last_point_end_time + segment_duration
+                }
             };
             
             let waypoint = if i == 0 {
@@ -174,8 +218,11 @@ impl TimelineObject
             } else if i == num_points - 1 {
                 &activity_segment.end_location
             } else {
-                &activity_segment.waypoint_path.waypoints[i - 1]
-                // &activity_segment.start_location
+                match point_type {
+                    PointType::Waypoints => &activity_segment.waypoint_path.as_ref().expect("PointType is classified as Waypoints but is None").waypoints[i - 1],
+                    PointType::RawPoints => &activity_segment.simplified_raw_path.as_ref().expect("PointType is classified as RawPoints but is None").points[i - 1].location,
+                    PointType::NoPoints => panic!("PointType is classified as NoPoints but attempted to iterate {} points", num_points)
+                }
             };
             let latitude = parse_geolocation_e7(&waypoint.latitude_e7)?;
             let longitude = parse_geolocation_e7(&waypoint.longitude_e7)?;
@@ -199,6 +246,20 @@ impl TimelineObject
             Ok(TimelineType::ActivitySegment)
         } else {
             Err(DecoderError::EmptyEntryError("Empty TimelineObject".to_string()))
+        }
+    }
+
+    fn get_point_type(&self) -> Result<PointType, DecoderError> {
+        let activity_segment = match self.activity_segment.as_ref() {
+            Some(activity_segment) => activity_segment,
+            None => return Err(DecoderError::EmptyEntryError("Attempted to get PointType but activity segment missing".to_string()))
+        };
+        if activity_segment.simplified_raw_path.is_some() {
+            Ok(PointType::RawPoints)
+        } else if activity_segment.waypoint_path.is_some() {
+            Ok(PointType::Waypoints)
+        } else {
+            Ok(PointType::NoPoints)
         }
     }
 }
