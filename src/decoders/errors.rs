@@ -23,7 +23,7 @@ impl fmt::Display for DecoderError {
 
 impl From<serde_json::Error> for DecoderError {
     fn from(err: serde_json::Error) -> Self {
-        DecoderError::DeserializeError(err.to_string())
+        DecoderError::DeserializeError(format!("Failed to deserialize json {:#?} at line, col {},{}", err.classify(), err.line(),err.column()))
     }
 }
 

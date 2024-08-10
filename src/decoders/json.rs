@@ -80,16 +80,13 @@ struct PlaceVisit
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct ActivitySegment
 {
-    #[serde(rename = "startLocation")]
     start_location: Location,
-    #[serde(rename = "endLocation")]
     end_location: Location,
     duration: JsonDuration,
-    #[serde(rename = "simplifiedRawPath")]
     simplified_raw_path: Option<SimplifiedRawPath>,
-    #[serde(rename = "waypointPath")]
     waypoint_path: Option<WaypointPath>
 }
 
@@ -97,9 +94,9 @@ struct ActivitySegment
 struct Location
 {
     #[serde(rename = "latitudeE7", alias = "latE7")]
-    latitude_e7: GeoLocationE7,
+    latitude_e7: Option<GeoLocationE7>,
     #[serde(rename = "longitudeE7", alias = "lngE7")]
-    longitude_e7: GeoLocationE7
+    longitude_e7: Option<GeoLocationE7>
 }
 
 #[derive(Deserialize)]
@@ -118,6 +115,7 @@ struct SimplifiedRawPath
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct RawPoint
 {
     #[serde(flatten)]
@@ -161,13 +159,17 @@ impl TimelineObject
             Some(place_visit) => place_visit,
             None => return Err(DecoderError::EmptyEntryError("TimelineObject classified as PlaceVisit but was empty".to_string()))
         };
-        Ok(vec![SpaceTimePoint
-        {
-            latitude: parse_geolocation_e7(&place_visit.location.latitude_e7)?,
-            longitude: parse_geolocation_e7(&place_visit.location.longitude_e7)?,
-            start_time: parse_timestamp_str(&place_visit.duration.start_timestamp)?,
-            end_time: parse_timestamp_str(&place_visit.duration.end_timestamp)?
-        }])
+        if let (Some(latitude), Some(longitude)) = (&place_visit.location.latitude_e7, &place_visit.location.longitude_e7) {
+            Ok(vec![SpaceTimePoint
+            {
+                latitude: parse_geolocation_e7(latitude)?,
+                longitude: parse_geolocation_e7(longitude)?,
+                start_time: parse_timestamp_str(&place_visit.duration.start_timestamp)?,
+                end_time: parse_timestamp_str(&place_visit.duration.end_timestamp)?
+            }])
+        } else {
+            Ok(Vec::new())
+        }
     }
 
     fn parse_activity_segment(&self) -> PointsResult {
@@ -188,7 +190,8 @@ impl TimelineObject
         };
         let segment_duration = (end_time - start_time) / (num_points as i32); // Unused for RawPoints
 
-        let mut space_time_points = Vec::with_capacity(num_points);
+        let mut space_time_points = Vec::new();
+        space_time_points.reserve_exact(num_points);
         let mut last_point_end_time = start_time;
         for i in 0..num_points {
             let point_end_time = if i == num_points - 1 {
@@ -224,8 +227,16 @@ impl TimelineObject
                     PointType::NoPoints => panic!("PointType is classified as NoPoints but attempted to iterate {} points", num_points)
                 }
             };
-            let latitude = parse_geolocation_e7(&waypoint.latitude_e7)?;
-            let longitude = parse_geolocation_e7(&waypoint.longitude_e7)?;
+            
+            let latitude;
+            let longitude;
+            if let (Some(latitude_e7), Some(longitude_e7)) = (waypoint.latitude_e7.as_ref(), waypoint.longitude_e7.as_ref()) {
+                latitude = parse_geolocation_e7(latitude_e7)?;
+                longitude = parse_geolocation_e7(longitude_e7)?;
+            } else {
+                last_point_end_time = point_end_time;
+                continue;
+            }
 
             space_time_points.push(SpaceTimePoint{
                 start_time: last_point_end_time,
@@ -286,7 +297,8 @@ struct LocationEntry
 impl IntoSpaceTimePoints for LocationEntries
 {
     fn to_space_time_points(&self) -> PointsResult {
-        let mut space_time_points = Vec::with_capacity(self.locations.len());
+        let mut space_time_points = Vec::new();
+        space_time_points.reserve_exact(self.locations.len());
 
         for location in self.locations.iter().rev() {
             let timestamp = location.get_timestamp()?;
@@ -365,18 +377,19 @@ enum EntryType {
     Visit,
     TimelinePath,
     StartEnd,
+    TimeLineMemory
 }
 
 impl IntoSpaceTimePoints for JsonEntry {
     fn to_space_time_points(&self) -> PointsResult {
         match self.get_entry_type()? {
-            EntryType::Visit => self.parse_visit(),
-            EntryType::TimelinePath => self.parse_timeline_path(),
             EntryType::StartEnd => self.parse_start_end_entry(),
+            _ => Ok(Vec::new())
         }
     }
 }
 
+#[allow(dead_code)] // Visit and Activity are unused since timeline covers the same time period again
 impl JsonEntry {
     fn parse_visit(&self) -> PointsResult {
         let start_time = parse_timestamp_str(&self.start_time)?;
@@ -438,7 +451,8 @@ impl JsonEntry {
         } else if self.timeline_path.is_some() {
             Ok(EntryType::TimelinePath)
         } else {
-            Err(DecoderError::EmptyEntryError(format!("No Data Found for {:?} : {:?}", self.start_time, self)))
+            Ok(EntryType::TimeLineMemory)
+            // Err(DecoderError::EmptyEntryError(format!("No Data Found for {:?} : {:?}", self.start_time, self)))
         }
     }
 
