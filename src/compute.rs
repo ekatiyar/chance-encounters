@@ -19,7 +19,7 @@ impl PointDistance for SpaceTimePoint {
         let spatial_distance = self.haversine_distance(point[0], point[1]);
         let temporal_distance = self.temporal_distance(point[2], point[3]);
 
-        Self::SPATIAL_WEIGHT * spatial_distance.powi(2) + Self::TEMPORAL_WEIGHT * temporal_distance.powi(2)
+        (Self::SPATIAL_WEIGHT * spatial_distance).powi(2) + (Self::TEMPORAL_WEIGHT * temporal_distance).powi(2)
     }
 
     fn contains_point(&self, point: &[f64; 4]) -> bool {
@@ -27,16 +27,18 @@ impl PointDistance for SpaceTimePoint {
     }
 
     fn distance_2_if_less_or_equal(&self, point: &[f64; 4], max_distance_2: f64) -> Option<f64> {
-        let temporal_component = self.temporal_distance(point[2], point[3]).powi(2) * Self::TEMPORAL_WEIGHT;
+        let temporal_component = (self.temporal_distance(point[2], point[3]) * Self::TEMPORAL_WEIGHT).powi(2);
         if temporal_component > max_distance_2 {
             return None;
         }
 
-        let spatial_component = self.euclidean_distance(point[0], point[1]).powi(2) * Self::SPATIAL_WEIGHT;
-        if spatial_component > max_distance_2 {
+        // calculate spatial distance lower bound using more efficient euclidean distance calculation
+        let spatial_component = (self.euclidean_distance(point[0], point[1]) * Self::SPATIAL_WEIGHT).powi(2);
+        if spatial_component + temporal_component > max_distance_2 {
             return None;
         }
 
-        Some(self.distance_2(point))
+        // return actual squared distance using haversine formula for spatial component
+        Some(temporal_component + (self.haversine_distance(point[0], point[1]) * Self::SPATIAL_WEIGHT).powi(2))
     }
 }
