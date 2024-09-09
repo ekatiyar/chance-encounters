@@ -2,7 +2,7 @@ use leptos::*;
 use leptos_workers::worker;
 use crate::errors::Error;
 use crate::decoders::*;
-use crate::model::*;
+use crate::compute::{spacetime::SpaceTimeRecord, ChanceEncounter, get_nearest_points};
 use crate::utils::{fileutils::*, *, errors::FileProcessingError};
 
 #[component]
@@ -92,8 +92,13 @@ pub async fn process_data(files: FileContents) -> Result<String, Error>
     logging::log!("Running WebWorker...");
     let record1 = SpaceTimeRecord::new(&file1.content, FileFormat::Json)?;
     let record2 = SpaceTimeRecord::new(&file2.content, FileFormat::Json)?;
+    let closest_points = get_nearest_points(record1, record2);
 
-    Ok(format!("Data Processed. File1 {}, File2 {}", record1.points.len(), record2.points.len()))
+    let num_points = closest_points.len();
+    for point in &closest_points {
+        logging::log!("Chance Encounter: {:?} and {:?} with a distance of {} km and {} s", point.point1, point.point2, point.distance_km, point.distance_s);
+    }
+    Ok(format!("Data Processed. Retrieved {} nearest points", closest_points.len()))
     // TODO: Implement actual analysis logic here
 }
 

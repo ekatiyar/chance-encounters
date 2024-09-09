@@ -38,7 +38,6 @@ impl Into<PointsResult> for JsonRecord {
                 space_time_points.reserve_exact(location_entries.locations.len()); // We know there are exactly this many entries
                 space_time_points.append(&mut location_entries.to_space_time_points()?);
             },
-            _ => return Err(DecoderError::DeserializeError("Unsupported Type".to_string()))
         }
         Ok(space_time_points)
     }

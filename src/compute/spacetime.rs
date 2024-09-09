@@ -1,3 +1,5 @@
+use std::hash::Hash;
+
 use chrono::{DateTime, Utc};
 
 #[derive(Debug)]
@@ -5,7 +7,7 @@ pub struct SpaceTimeRecord {
     pub points: Vec<SpaceTimePoint>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Clone, Copy)]
 pub struct SpaceTimePoint {
     pub start_time: DateTime<Utc>,
     pub end_time: DateTime<Utc>,
@@ -13,17 +15,22 @@ pub struct SpaceTimePoint {
     pub longitude: f64,
 }
 
+impl Eq for SpaceTimePoint {}
+
 impl SpaceTimePoint {
     const EARTH_RADIUS: f64 = 6371.0; // in kilometers
+    const LAT_CONSTANT_2: f64 = 12155.0625;
 
-    pub fn euclidean_distance(&self, latitude: f64, longitude: f64) -> f64 {
+    // returns the squared distance, as this allows us to omit sqrt calls
+    pub fn euclidean_distance_2(&self, latitude: f64, longitude: f64) -> f64 {
         let delta_lat = self.latitude - latitude;
         let delta_lon = self.longitude - longitude;
         let avg_lat = (self.latitude + latitude) / 2.0;
-        110.25 * (delta_lat.powi(2) + (delta_lon * avg_lat.cos()).powi(2)).sqrt()
+        Self::LAT_CONSTANT_2 * (delta_lat.powi(2) + (delta_lon * avg_lat.cos()).powi(2))
     }
 
     // this is a more efficient, simplified version of the haversine formula, but it overshoots
+    #[allow(dead_code)]
     pub fn equirectangular_distance(&self, latitude: f64, longitude: f64) -> f64 {
         let delta_lat = (self.latitude - latitude).to_radians();
         let delta_lon = (self.longitude - longitude).to_radians();
@@ -74,9 +81,9 @@ mod tests {
             longitude: -99.436554,
         };
 
-        let distance = point.euclidean_distance(38.504048, -98.315949);
+        let distance = point.euclidean_distance_2(38.504048, -98.315949);
         // Distance is undershot, but this is expected for euclidean distance calculations
-        assert!((distance - 341.355).abs() < ERROR, "Distance was actually {}", distance);
+        assert!((distance.sqrt() - 341.355).abs() < ERROR, "Distance was actually {}", distance);
     }
 
     #[test]
@@ -89,7 +96,7 @@ mod tests {
         };
 
         let distance = point.haversine_distance(38.504048, -98.315949);
-        assert!((distance - 347.328).abs() < ERROR, "Distance was actually {}", distance);
+        assert!((distance.sqrt() - 347.328).abs() < ERROR, "Distance was actually {}", distance);
     }
 
     #[test]

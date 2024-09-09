@@ -3,7 +3,7 @@ pub mod json;
 pub mod errors;
 
 use std::str::FromStr;
-use crate::model::{SpaceTimePoint, SpaceTimeRecord};
+use crate::compute::spacetime::{SpaceTimePoint, SpaceTimeRecord};
 use crate::decoders::{json::JsonRecord, gpx::GpxRecords, errors::*};
 
 type RecordResult = Result<SpaceTimeRecord, DecoderError>;

@@ -1,5 +1,4 @@
 mod app;
-mod model;
 mod compute;
 mod utils;
 mod decoders;

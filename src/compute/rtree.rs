@@ -1,5 +1,5 @@
-use crate::model::{SpaceTimeRecord, SpaceTimePoint};
-use rstar::{RTree, RTreeObject, AABB, PointDistance};
+use super::spacetime::SpaceTimePoint;
+use rstar::{RTreeObject, AABB, PointDistance};
 
 impl RTreeObject for SpaceTimePoint {
     type Envelope = AABB<[f64; 4]>;
@@ -23,7 +23,7 @@ impl PointDistance for SpaceTimePoint {
     }
 
     fn contains_point(&self, point: &[f64; 4]) -> bool {
-        return self.latitude == point[0] && self.longitude == point[1] && self.start_time.timestamp() as f64 == point[2] && self.end_time.timestamp() as f64 == point[3];
+        return self.latitude == point[0] && self.longitude == point[1] && self.temporal_distance(point[2], point[3]) == 0.0;
     }
 
     fn distance_2_if_less_or_equal(&self, point: &[f64; 4], max_distance_2: f64) -> Option<f64> {
@@ -33,7 +33,7 @@ impl PointDistance for SpaceTimePoint {
         }
 
         // calculate spatial distance lower bound using more efficient euclidean distance calculation
-        let spatial_component = (self.euclidean_distance(point[0], point[1]) * Self::SPATIAL_WEIGHT).powi(2);
+        let spatial_component = self.euclidean_distance_2(point[0], point[1]) * Self::SPATIAL_WEIGHT.powi(2);
         if spatial_component + temporal_component > max_distance_2 {
             return None;
         }
