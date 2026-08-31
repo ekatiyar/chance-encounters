@@ -1,0 +1,13 @@
+{
+  "name": "chance-encounters",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "chance_encounters_bg.wasm",
+    "chance_encounters.js"
+  ],
+  "main": "chance_encounters.js",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}
