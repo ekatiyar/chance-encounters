@@ -27,6 +27,25 @@ const els = {
 const MAP_ZOOM_THRESHOLD = 12; // at/above this, map shows colored pairs
 const TIMELINE_DETAIL_SPAN_MS = 3 * 24 * 3600 * 1000; // visible span under this => colored
 
+// Rank is ordinal (closest-first), so it takes a one-hue ramp rather than N hues.
+// Fixed ladder — generating a step per encounter would reintroduce the old bug in
+// lightness instead of hue (ten steps over this range lands at ΔL 0.037, under the
+// 0.06 floor, and adjacent ranks stop being distinguishable).
+const RANK_RAMP = ["#9ec5f4", "#6da7ec", "#3987e5", "#256abf", "#184f95"];
+
+// Canvas takes literal colours, so mirror the CSS tokens once at load.
+const THEME = (() => {
+  const s = getComputedStyle(document.documentElement);
+  const t = (n) => s.getPropertyValue(n).trim();
+  return {
+    panel: t("--panel"),
+    border: t("--border"),
+    grid: t("--grid"),
+    muted: t("--muted"),
+    text: t("--text"),
+  };
+})();
+
 const state = {
   encounters: [],
   colors: [],
@@ -137,9 +156,8 @@ els.analyzeBtn.addEventListener("click", async () => {
 // ---------- Result handling ----------
 function onResult(result) {
   const encounters = result.encounters || [];
-  const n = Math.max(encounters.length, 1);
   state.encounters = encounters;
-  state.colors = encounters.map((_, i) => `hsl(${Math.round((i * 360) / n)}, 75%, 60%)`);
+  state.colors = encounters.map((_, i) => RANK_RAMP[Math.min(i, RANK_RAMP.length - 1)]);
   state.stats = result.stats;
   transitionToResults();
 }
@@ -268,9 +286,9 @@ function buildMapLayers() {
     // Collapsed: a single neutral dot per encounter.
     L.circleMarker(midpoint(enc), {
       radius: 5,
-      color: "#8b98a5",
+      color: THEME.muted,
       weight: 1,
-      fillColor: "#8b98a5",
+      fillColor: THEME.muted,
       fillOpacity: 0.85,
     })
       .bindTooltip(`#${enc.rank}`, { direction: "top" })
@@ -279,14 +297,21 @@ function buildMapLayers() {
 
     // Expanded: colored A + B markers joined by a line.
     const line = L.polyline([a, b], { color, weight: 2, opacity: 0.6, dashArray: "4 4" });
-    const ma = L.circleMarker(a, { radius: 6, color, weight: 2, fillColor: color, fillOpacity: 0.95 }).bindTooltip(
-      `#${enc.rank} · A`,
-      { direction: "top" }
-    );
-    const mb = L.circleMarker(b, { radius: 6, color, weight: 2, fillColor: color, fillOpacity: 0.4 }).bindTooltip(
-      `#${enc.rank} · B`,
-      { direction: "top" }
-    );
+    // Panel-coloured ring: the ramp's dark end is ~1.3:1 against tinted roads.
+    const ma = L.circleMarker(a, {
+      radius: 6,
+      color: THEME.panel,
+      weight: 2,
+      fillColor: color,
+      fillOpacity: 0.95,
+    }).bindTooltip(`#${enc.rank} · A`, { direction: "top" });
+    const mb = L.circleMarker(b, {
+      radius: 6,
+      color: THEME.panel,
+      weight: 2,
+      fillColor: color,
+      fillOpacity: 0.4,
+    }).bindTooltip(`#${enc.rank} · B`, { direction: "top" });
     [line, ma, mb].forEach((layer) => {
       layer.on("mouseover", () => setActive(i));
       layer.addTo(state.expandedLayer);
@@ -456,9 +481,9 @@ function renderTimeline() {
   ctx.clearRect(0, 0, w, h);
 
   // lane guides + labels
-  ctx.strokeStyle = "#2a333d";
+  ctx.strokeStyle = THEME.border;
   ctx.lineWidth = 1;
-  ctx.fillStyle = "#8b98a5";
+  ctx.fillStyle = THEME.muted;
   ctx.font = "11px system-ui, sans-serif";
   [0, 1].forEach((lane) => {
     const y = laneY(h, lane);
@@ -477,7 +502,7 @@ function renderTimeline() {
   state.encounters.forEach((enc, i) => {
     const active = i === state.activeIndex;
     const colored = detailed || active;
-    const color = colored ? state.colors[i] : "#8b98a5";
+    const color = colored ? state.colors[i] : THEME.muted;
     const aMid = (enc.a.start + enc.a.end) / 2;
     const bMid = (enc.b.start + enc.b.end) / 2;
     const ax = timeToX(aMid);
@@ -523,14 +548,14 @@ function drawDot(ctx, x, y, r, color, ring) {
   ctx.arc(x, y, r, 0, Math.PI * 2);
   ctx.fill();
   if (ring) {
-    ctx.strokeStyle = "#fff";
+    ctx.strokeStyle = THEME.text;
     ctx.lineWidth = 2;
     ctx.stroke();
   }
 }
 
 function drawTimeAxis(ctx, w, h) {
-  ctx.fillStyle = "#8b98a5";
+  ctx.fillStyle = THEME.muted;
   ctx.font = "10px system-ui, sans-serif";
   const tl = state.tl;
   const spanMs = w / tl.scale;
@@ -548,7 +573,7 @@ function drawTimeAxis(ctx, w, h) {
   const start = Math.ceil(tl.offset / step) * step;
   for (let t = start; timeToX(t) < w; t += step) {
     const x = timeToX(t);
-    ctx.strokeStyle = "#20272f";
+    ctx.strokeStyle = THEME.grid;
     ctx.beginPath();
     ctx.moveTo(x, 0);
     ctx.lineTo(x, h - 14);
