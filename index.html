@@ -1,13 +1,122 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark">
+<html lang="en">
   <head>
-    <meta charset="utf-8">
-    <link data-trunk rel="rust" data-wasm-opt="z" />
-    <link data-trunk rel="tailwind-css" href="style/tailwind.css" />
-    <title>Location History App</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Chance Encounters</title>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+      integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+      crossorigin=""
+    />
+    <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <div id="app"></div>
+    <!-- Upload view -->
+    <main id="upload-view" class="view">
+      <div class="upload-card">
+        <h1>Chance Encounters</h1>
+        <p class="tagline">Find where and when two location histories crossed paths.</p>
+
+        <div class="file-fields">
+          <label class="file-field">
+            <span>Person A — location history (JSON)</span>
+            <input type="file" id="file-a" accept=".json,application/json" />
+          </label>
+          <label class="file-field">
+            <span>Person B — location history (JSON)</span>
+            <input type="file" id="file-b" accept=".json,application/json" />
+          </label>
+        </div>
+
+        <div class="search-config">
+          <div class="mode-tabs" role="tablist">
+            <button type="button" class="mode-tab active" data-mode="window" role="tab">Windows</button>
+            <button type="button" class="mode-tab" data-mode="speed" role="tab">Speed</button>
+          </div>
+
+          <div class="mode-panel" data-panel="window">
+            <div class="control-row">
+              <label for="win-distance">Max distance</label>
+              <div class="control-input">
+                <input type="number" id="win-distance" value="100" min="0" step="1" />
+                <span class="unit">km</span>
+              </div>
+            </div>
+            <div class="control-row">
+              <label for="win-time">Max time gap</label>
+              <div class="control-input">
+                <input type="number" id="win-time" value="1" min="0" step="1" />
+                <select id="win-time-unit">
+                  <option value="60">minutes</option>
+                  <option value="3600">hours</option>
+                  <option value="86400" selected>days</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div class="mode-panel hidden" data-panel="speed">
+            <div class="control-row">
+              <label>Assumed speed</label>
+              <div class="segmented" id="speed-presets">
+                <button type="button" data-kmh="5">Walking</button>
+                <button type="button" data-kmh="15">Running</button>
+                <button type="button" data-kmh="25">Biking</button>
+                <button type="button" data-kmh="100" class="active">Driving</button>
+                <button type="button" data-kmh="900">Flying</button>
+                <button type="button" data-kmh="28000">Rocket</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="control-row grouping">
+            <label for="group-dist">Merge events within</label>
+            <div class="control-input">
+              <input type="number" id="group-dist" value="0.5" min="0" step="0.1" />
+              <span class="unit">km and</span>
+              <input type="number" id="group-time" value="1" min="0" step="0.5" />
+              <span class="unit">hr</span>
+            </div>
+          </div>
+        </div>
+
+        <button id="analyze-btn" class="primary-btn" disabled>Find Encounters</button>
+
+        <div id="progress" class="progress hidden">
+          <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
+          <span id="progress-label" class="progress-label">Starting…</span>
+        </div>
+
+        <p id="error" class="error hidden"></p>
+      </div>
+    </main>
+
+    <!-- Results view -->
+    <section id="results-view" class="view hidden">
+      <aside id="encounter-list" class="encounter-list">
+        <header class="list-header">
+          <h2>Encounters</h2>
+          <span id="stats" class="stats"></span>
+        </header>
+        <ol id="encounter-items" class="encounter-items"></ol>
+      </aside>
+      <div id="map" class="map"></div>
+      <div class="timeline-wrap">
+        <div class="timeline-header">
+          <span>Timeline</span>
+          <span class="hint">scroll to zoom · drag to pan</span>
+        </div>
+        <canvas id="timeline" class="timeline"></canvas>
+      </div>
+    </section>
+
+    <script
+      src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+      integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+      crossorigin=""
+    ></script>
+    <script type="module" src="./main.js"></script>
   </body>
 </html>

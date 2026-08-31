@@ -182,11 +182,18 @@ impl TimelineObject
         let end_time = parse_timestamp_str(&activity_segment.duration.end_timestamp)?;
 
         let point_type = self.get_point_type()?;
-        
+
+        // Bind the intermediate-point sources once; missing data surfaces as an error rather than a panic.
+        let raw_points = activity_segment.simplified_raw_path.as_ref().map(|p| p.points.as_slice());
+        let waypoints = activity_segment.waypoint_path.as_ref().map(|w| w.waypoints.as_slice());
+
+        let missing_raw = || DecoderError::EmptyEntryError("PointType classified as RawPoints but simplified_raw_path is None".to_string());
+        let missing_waypoints = || DecoderError::EmptyEntryError("PointType classified as Waypoints but waypoint_path is None".to_string());
+
         let num_points = 2 + match point_type {
-            PointType::Waypoints => activity_segment.waypoint_path.as_ref().expect("PointType is classified as Waypoints but is None").waypoints.len(),
-            PointType::RawPoints => activity_segment.simplified_raw_path.as_ref().expect("PointType is classified as RawPoints but is None").points.len(),
-            _ => 0
+            PointType::Waypoints => waypoints.ok_or_else(missing_waypoints)?.len(),
+            PointType::RawPoints => raw_points.ok_or_else(missing_raw)?.len(),
+            PointType::NoPoints => 0
         };
         let segment_duration = (end_time - start_time) / (num_points as i32); // Unused for RawPoints
 
@@ -200,31 +207,32 @@ impl TimelineObject
             else {
                 match point_type {
                     PointType::RawPoints => {
+                        let raw = raw_points.ok_or_else(missing_raw)?;
                         let cur_time = if i == 0 {
                             start_time
                         } else {
-                            parse_timestamp_str(&activity_segment.simplified_raw_path.as_ref().expect("PointType is classified as RawPoints but is None").points[i-1].timestamp)?
+                            parse_timestamp_str(&raw[i-1].timestamp)?
                         };
                         let next_time = if i == num_points - 2 {
                             end_time
                         } else {
-                            parse_timestamp_str(&activity_segment.simplified_raw_path.as_ref().expect("PointType is classified as RawPoints but is None").points[i].timestamp)?
+                            parse_timestamp_str(&raw[i].timestamp)?
                         };
                         cur_time + (next_time - cur_time) / 2
                     }
                     _ => last_point_end_time + segment_duration
                 }
             };
-            
+
             let waypoint = if i == 0 {
                 &activity_segment.start_location
             } else if i == num_points - 1 {
                 &activity_segment.end_location
             } else {
                 match point_type {
-                    PointType::Waypoints => &activity_segment.waypoint_path.as_ref().expect("PointType is classified as Waypoints but is None").waypoints[i - 1],
-                    PointType::RawPoints => &activity_segment.simplified_raw_path.as_ref().expect("PointType is classified as RawPoints but is None").points[i - 1].location,
-                    PointType::NoPoints => panic!("PointType is classified as NoPoints but attempted to iterate {} points", num_points)
+                    PointType::Waypoints => &waypoints.ok_or_else(missing_waypoints)?[i - 1],
+                    PointType::RawPoints => &raw_points.ok_or_else(missing_raw)?[i - 1].location,
+                    PointType::NoPoints => return Err(DecoderError::EmptyEntryError(format!("PointType classified as NoPoints but attempted to iterate {} points", num_points)))
                 }
             };
             
@@ -382,14 +390,17 @@ enum EntryType {
 
 impl IntoSpaceTimePoints for JsonEntry {
     fn to_space_time_points(&self) -> PointsResult {
+        // Each entry is exactly one type, so dispatching by type parses every
+        // record without double counting.
         match self.get_entry_type()? {
+            EntryType::Visit => self.parse_visit(),
+            EntryType::TimelinePath => self.parse_timeline_path(),
             EntryType::StartEnd => self.parse_start_end_entry(),
-            _ => Ok(Vec::new())
+            EntryType::TimeLineMemory => Ok(Vec::new()),
         }
     }
 }
 
-#[allow(dead_code)] // Visit and Activity are unused since timeline covers the same time period again
 impl JsonEntry {
     fn parse_visit(&self) -> PointsResult {
         let start_time = parse_timestamp_str(&self.start_time)?;
@@ -490,30 +501,4 @@ fn parse_geolocation_e7(geolocation_e7: &GeoLocationE7) -> Result<f64, DecoderEr
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_parse_timestamp_str() {
-        let timestamp = TimestampRfc3339("2015-01-25T09:11:16.547-08:00".to_string());
-        let dt = parse_timestamp_str(&timestamp);
-        assert!(dt.is_ok());
-        assert_eq!(dt.unwrap().format("%Y-%m-%dT%H:%M:%S%.3f%:z").to_string(), "2015-01-25T17:11:16.547+00:00");
-    }
-
-    #[test]
-    fn test_parse_geolocation_e7() {
-        let geolocation_e7 = GeoLocationE7(374219999);
-        let geolocation = parse_geolocation_e7(&geolocation_e7);
-        assert!(geolocation.is_ok());
-        assert_eq!(geolocation.unwrap(), 37.4219999);
-    }
-
-    #[test]
-    fn test_parse_geolocation() {
-        let geolocation = GeoLocation("geo:37.4219999,-122.0840576".to_string());
-        let geolocation = JsonEntry::parse_geolocation(&geolocation);
-        assert!(geolocation.is_ok());
-        assert_eq!(geolocation.unwrap(), (37.4219999, -122.0840576));
-    }
-}
+mod tests;

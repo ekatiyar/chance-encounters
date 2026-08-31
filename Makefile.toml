@@ -1,28 +1,27 @@
-[tasks.clean-dist]
-command = "trunk"
-args = ["clean", "--cargo"]
+[tasks.wasm-build]
+description = "Compile the wasm module with wasm-pack"
+command = "wasm-pack"
+args = ["build", ".", "--target", "web", "--out-dir", "release/pkg", "--no-typescript"]
 
-[tasks.clean-release]
-command = "trunk"
-args = ["clean", "--cargo", "--dist", "release"]
+[tasks.build]
+clear = true
+description = "Build wasm + assemble the static site into release/"
+dependencies = ["wasm-build"]
+script = '''
+rm -f release/pkg/.gitignore
+cp index.html styles.css main.js worker.js release/
+'''
 
-[tasks.run-dev]
-command = "trunk"
-args = ["serve", "--open"]
+[tasks.serve]
+description = "Serve the assembled site locally"
+command = "python3"
+args = ["-m", "http.server", "-d", "release", "8080"]
 
-[tasks.run-release]
-# dependencies = ["clean-release"]
-command = "trunk"
-args = [
-    "build",
-    "--release",
-    "--minify",
-    "--dist",
-    "release",
-    "--public-url",
-    "/chance-encounters/",
-]
+[tasks.test]
+command = "cargo"
+args = ["test"]
 
 [tasks.update-pages]
+description = "Publish release/ to the gh-pages branch"
 command = "git"
 args = ["subtree", "push", "--prefix", "release", "origin", "gh-pages"]

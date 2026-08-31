@@ -2,7 +2,10 @@
 /dist
 /test_data
 
-package-lock.json
+/pkg
+/release/pkg/README.md
+/release/pkg/package.json
+
 node_modules
 
 .vscode
